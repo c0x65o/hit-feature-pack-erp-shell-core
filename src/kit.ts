@@ -1,87 +1,327 @@
 'use client';
 
 import React from 'react';
-import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown } from 'lucide-react';
+import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { UiKit } from '@hit/ui-kit';
 
 // =============================================================================
-// ERP KIT - Dark, dense, admin-style components
+// ERP DESIGN SYSTEM
+// =============================================================================
+// This is an opinionated design system for admin/ERP interfaces.
+// Every component follows these rules strictly for visual consistency.
+
+// SPACING SCALE (in pixels) - use rem equivalents
+// 0: 0, 1: 4px, 2: 8px, 3: 12px, 4: 16px, 5: 20px, 6: 24px, 8: 32px, 10: 40px, 12: 48px
+
+// COLORS - Dark theme optimized for long work sessions
+const colors = {
+  // Backgrounds (darkest to lightest)
+  bg: {
+    page: '#0a0a0f',       // Page background - darkest
+    surface: '#12121a',    // Cards, panels - slightly lighter
+    elevated: '#1a1a24',   // Elevated elements, hovers
+    input: '#0d0d12',      // Input fields - darker than surface
+  },
+  // Borders
+  border: {
+    subtle: '#1f1f2e',     // Subtle separators
+    default: '#2a2a3d',    // Default borders
+    focus: '#3b82f6',      // Focus rings
+  },
+  // Text
+  text: {
+    primary: '#f4f4f5',    // Primary text - near white
+    secondary: '#a1a1aa',  // Secondary text - muted
+    muted: '#71717a',      // Very muted text
+    inverse: '#0a0a0f',    // Text on light backgrounds
+  },
+  // Semantic colors
+  primary: {
+    default: '#3b82f6',    // Blue - primary actions
+    hover: '#2563eb',
+    muted: 'rgba(59, 130, 246, 0.15)',
+  },
+  success: {
+    default: '#22c55e',
+    muted: 'rgba(34, 197, 94, 0.15)',
+    border: 'rgba(34, 197, 94, 0.3)',
+  },
+  warning: {
+    default: '#f59e0b',
+    muted: 'rgba(245, 158, 11, 0.15)',
+    border: 'rgba(245, 158, 11, 0.3)',
+  },
+  error: {
+    default: '#ef4444',
+    muted: 'rgba(239, 68, 68, 0.15)',
+    border: 'rgba(239, 68, 68, 0.3)',
+  },
+  info: {
+    default: '#06b6d4',
+    muted: 'rgba(6, 182, 212, 0.15)',
+    border: 'rgba(6, 182, 212, 0.3)',
+  },
+};
+
+// SIZING
+const sizing = {
+  inputHeight: '40px',      // All inputs, selects, buttons
+  inputHeightSm: '32px',    // Small variant
+  inputHeightLg: '48px',    // Large variant
+  borderRadius: '8px',      // Standard radius
+  borderRadiusSm: '6px',    // Small elements
+  borderRadiusLg: '12px',   // Cards, modals
+};
+
+// =============================================================================
+// COMPONENTS
 // =============================================================================
 
-// Helper for class names
-function cn(...classes: (string | false | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
+// -----------------------------------------------------------------------------
+// Global Styles - Injected once to ensure proper rendering
+// -----------------------------------------------------------------------------
+const globalStylesId = 'hit-ui-kit-styles';
+
+function injectGlobalStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(globalStylesId)) return;
+  
+  const style = document.createElement('style');
+  style.id = globalStylesId;
+  style.textContent = `
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Form element resets for UI Kit */
+    .hit-ui-kit input,
+    .hit-ui-kit textarea,
+    .hit-ui-kit select,
+    .hit-ui-kit button {
+      font-family: inherit;
+    }
+    
+    .hit-ui-kit input::placeholder,
+    .hit-ui-kit textarea::placeholder {
+      color: ${colors.text.muted};
+      opacity: 1;
+    }
+    
+    .hit-ui-kit input:focus,
+    .hit-ui-kit textarea:focus,
+    .hit-ui-kit select:focus {
+      border-color: ${colors.border.focus} !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 // -----------------------------------------------------------------------------
-// Page
+// Page - The master layout component
+// Controls: background, max-width, header alignment, spacing
 // -----------------------------------------------------------------------------
 const Page: UiKit['Page'] = ({ title, description, actions, children }) => {
-  return React.createElement('div', { className: 'space-y-6' },
-    (title || actions) && React.createElement('div', { className: 'flex items-start justify-between gap-4' },
-      React.createElement('div', null,
-        title && React.createElement('h1', { className: 'text-2xl font-semibold text-gray-100' }, title),
-        description && React.createElement('p', { className: 'text-gray-400 mt-1' }, description)
+  // Inject global styles on first render
+  React.useEffect(() => {
+    injectGlobalStyles();
+  }, []);
+
+  return React.createElement('div', {
+    className: 'hit-ui-kit',
+    style: {
+      minHeight: '100%',
+      backgroundColor: colors.bg.page,
+    },
+  },
+    // Header section
+    (title || description || actions) && React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '24px',
+        marginBottom: '24px',
+        flexWrap: 'wrap',
+      },
+    },
+      React.createElement('div', { style: { flex: '1 1 auto', minWidth: '200px' } },
+        title && React.createElement('h1', {
+          style: {
+            fontSize: '24px',
+            fontWeight: '600',
+            color: colors.text.primary,
+            margin: '0 0 4px 0',
+            lineHeight: '1.3',
+          },
+        }, title),
+        description && React.createElement('p', {
+          style: {
+            fontSize: '14px',
+            color: colors.text.secondary,
+            margin: 0,
+            lineHeight: '1.5',
+          },
+        }, description)
       ),
-      actions && React.createElement('div', { className: 'flex-shrink-0' }, actions)
+      actions && React.createElement('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexShrink: 0,
+        },
+      }, actions)
     ),
-    children
+    // Content
+    React.createElement('div', {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+      },
+    }, children)
   );
 };
 
 // -----------------------------------------------------------------------------
-// Card
+// Card - Container for content sections
+// Fixed padding, consistent styling
 // -----------------------------------------------------------------------------
 const Card: UiKit['Card'] = ({ title, description, footer, children }) => {
-  return React.createElement('div', { className: 'bg-gray-900 border border-gray-800 rounded-lg overflow-hidden' },
-    (title || description) && React.createElement('div', { className: 'px-6 py-4 border-b border-gray-800' },
-      title && React.createElement('h2', { className: 'text-lg font-medium text-gray-100' }, title),
-      description && React.createElement('p', { className: 'text-sm text-gray-400 mt-1' }, description)
+  return React.createElement('div', {
+    style: {
+      backgroundColor: colors.bg.surface,
+      border: `1px solid ${colors.border.subtle}`,
+      borderRadius: sizing.borderRadiusLg,
+      overflow: 'hidden',
+    },
+  },
+    // Header
+    (title || description) && React.createElement('div', {
+      style: {
+        padding: '16px 20px',
+        borderBottom: `1px solid ${colors.border.subtle}`,
+      },
+    },
+      title && React.createElement('h2', {
+        style: {
+          fontSize: '16px',
+          fontWeight: '600',
+          color: colors.text.primary,
+          margin: 0,
+          lineHeight: '1.4',
+        },
+      }, title),
+      description && React.createElement('p', {
+        style: {
+          fontSize: '13px',
+          color: colors.text.secondary,
+          margin: '4px 0 0 0',
+          lineHeight: '1.4',
+        },
+      }, description)
     ),
-    React.createElement('div', { className: 'p-6' }, children),
-    footer && React.createElement('div', { className: 'px-6 py-4 border-t border-gray-800 bg-gray-900/50' }, footer)
+    // Body
+    React.createElement('div', {
+      style: {
+        padding: '20px',
+      },
+    }, children),
+    // Footer
+    footer && React.createElement('div', {
+      style: {
+        padding: '16px 20px',
+        borderTop: `1px solid ${colors.border.subtle}`,
+        backgroundColor: colors.bg.elevated,
+      },
+    }, footer)
   );
 };
 
 // -----------------------------------------------------------------------------
-// Button
+// Button - Consistent sizing across all variants
 // -----------------------------------------------------------------------------
 const Button: UiKit['Button'] = ({ variant = 'primary', size = 'md', loading, disabled, type = 'button', onClick, children }) => {
-  const baseClasses = 'inline-flex items-center justify-center font-medium transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed';
-  
-  const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-800 text-gray-100 hover:bg-gray-700 border border-gray-700',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
-    ghost: 'text-gray-400 hover:text-gray-100 hover:bg-gray-800',
-    link: 'text-blue-500 hover:text-blue-400 underline-offset-4 hover:underline',
+  const heights = { sm: sizing.inputHeightSm, md: sizing.inputHeight, lg: sizing.inputHeightLg };
+  const paddings = { sm: '0 12px', md: '0 16px', lg: '0 24px' };
+  const fontSizes = { sm: '13px', md: '14px', lg: '15px' };
+
+  const variantStyles: Record<string, React.CSSProperties> = {
+    primary: {
+      backgroundColor: colors.primary.default,
+      color: '#ffffff',
+      border: 'none',
+    },
+    secondary: {
+      backgroundColor: colors.bg.elevated,
+      color: colors.text.primary,
+      border: `1px solid ${colors.border.default}`,
+    },
+    danger: {
+      backgroundColor: colors.error.default,
+      color: '#ffffff',
+      border: 'none',
+    },
+    ghost: {
+      backgroundColor: 'transparent',
+      color: colors.text.secondary,
+      border: 'none',
+    },
+    link: {
+      backgroundColor: 'transparent',
+      color: colors.primary.default,
+      border: 'none',
+      padding: '0',
+      height: 'auto',
+    },
   };
 
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm gap-1.5',
-    md: 'px-4 py-2 text-sm gap-2',
-    lg: 'px-6 py-3 text-base gap-2',
+  const baseStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    height: variant === 'link' ? 'auto' : heights[size],
+    padding: variant === 'link' ? '0' : paddings[size],
+    fontSize: fontSizes[size],
+    fontWeight: '500',
+    borderRadius: sizing.borderRadius,
+    cursor: disabled || loading ? 'not-allowed' : 'pointer',
+    opacity: disabled || loading ? 0.5 : 1,
+    transition: 'all 150ms ease',
+    whiteSpace: 'nowrap',
+    ...variantStyles[variant],
   };
 
   return React.createElement('button', {
     type,
-    onClick,
+    onClick: disabled || loading ? undefined : onClick,
     disabled: disabled || loading,
-    className: cn(baseClasses, variantClasses[variant], sizeClasses[size]),
+    style: baseStyle,
   },
-    loading && React.createElement(Loader2, { size: size === 'sm' ? 14 : 16, className: 'animate-spin' }),
+    loading && React.createElement(Loader2, { size: size === 'sm' ? 14 : 16, style: { animation: 'spin 1s linear infinite' } }),
     children
   );
 };
 
 // -----------------------------------------------------------------------------
-// Input
+// Input - Fixed height, consistent styling
 // -----------------------------------------------------------------------------
 const Input: UiKit['Input'] = ({ label, type = 'text', placeholder, value, onChange, error, disabled, required }) => {
-  return React.createElement('div', { className: 'space-y-1.5' },
-    label && React.createElement('label', { className: 'block text-sm font-medium text-gray-200' },
+  return React.createElement('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  },
+    label && React.createElement('label', {
+      style: {
+        fontSize: '13px',
+        fontWeight: '500',
+        color: colors.text.secondary,
+      },
+    },
       label,
-      required && React.createElement('span', { className: 'text-red-500 ml-1' }, '*')
+      required && React.createElement('span', { style: { color: colors.error.default, marginLeft: '4px' } }, '*')
     ),
     React.createElement('input', {
       type,
@@ -89,25 +329,51 @@ const Input: UiKit['Input'] = ({ label, type = 'text', placeholder, value, onCha
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
       placeholder,
       disabled,
-      className: cn(
-        'w-full px-3 py-2 rounded-lg border bg-gray-800 text-gray-100 placeholder-gray-500',
-        'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        error ? 'border-red-500' : 'border-gray-700'
-      ),
+      style: {
+        // Reset browser defaults
+        WebkitAppearance: 'none',
+        MozAppearance: 'none',
+        appearance: 'none',
+        boxSizing: 'border-box',
+        margin: 0,
+        fontFamily: 'inherit',
+        // Our styles
+        width: '100%',
+        height: sizing.inputHeight,
+        padding: '0 12px',
+        fontSize: '14px',
+        lineHeight: '1.5',
+        color: colors.text.primary,
+        backgroundColor: colors.bg.input,
+        border: `1px solid ${error ? colors.error.default : colors.border.default}`,
+        borderRadius: sizing.borderRadius,
+        outline: 'none',
+        transition: 'border-color 150ms ease, box-shadow 150ms ease',
+        opacity: disabled ? 0.5 : 1,
+      },
     }),
-    error && React.createElement('p', { className: 'text-sm text-red-500' }, error)
+    error && React.createElement('p', {
+      style: { fontSize: '12px', color: colors.error.default, margin: 0 },
+    }, error)
   );
 };
 
 // -----------------------------------------------------------------------------
-// TextArea
+// TextArea - Consistent with Input styling
 // -----------------------------------------------------------------------------
 const TextArea: UiKit['TextArea'] = ({ label, placeholder, value, onChange, rows = 4, error, disabled, required }) => {
-  return React.createElement('div', { className: 'space-y-1.5' },
-    label && React.createElement('label', { className: 'block text-sm font-medium text-gray-200' },
+  return React.createElement('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  },
+    label && React.createElement('label', {
+      style: {
+        fontSize: '13px',
+        fontWeight: '500',
+        color: colors.text.secondary,
+      },
+    },
       label,
-      required && React.createElement('span', { className: 'text-red-500 ml-1' }, '*')
+      required && React.createElement('span', { style: { color: colors.error.default, marginLeft: '4px' } }, '*')
     ),
     React.createElement('textarea', {
       value,
@@ -115,48 +381,91 @@ const TextArea: UiKit['TextArea'] = ({ label, placeholder, value, onChange, rows
       placeholder,
       rows,
       disabled,
-      className: cn(
-        'w-full px-3 py-2 rounded-lg border bg-gray-800 text-gray-100 placeholder-gray-500 resize-none',
-        'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        error ? 'border-red-500' : 'border-gray-700'
-      ),
+      style: {
+        // Reset browser defaults
+        WebkitAppearance: 'none',
+        MozAppearance: 'none',
+        appearance: 'none',
+        boxSizing: 'border-box',
+        margin: 0,
+        fontFamily: 'inherit',
+        // Our styles
+        width: '100%',
+        padding: '10px 12px',
+        fontSize: '14px',
+        color: colors.text.primary,
+        backgroundColor: colors.bg.input,
+        border: `1px solid ${error ? colors.error.default : colors.border.default}`,
+        borderRadius: sizing.borderRadius,
+        outline: 'none',
+        resize: 'vertical',
+        minHeight: '100px',
+        lineHeight: '1.5',
+        opacity: disabled ? 0.5 : 1,
+      },
     }),
-    error && React.createElement('p', { className: 'text-sm text-red-500' }, error)
+    error && React.createElement('p', {
+      style: { fontSize: '12px', color: colors.error.default, margin: 0 },
+    }, error)
   );
 };
 
 // -----------------------------------------------------------------------------
-// Select
+// Select - Same height as Input and Button
 // -----------------------------------------------------------------------------
 const Select: UiKit['Select'] = ({ label, options, value, onChange, placeholder, error, disabled, required }) => {
-  return React.createElement('div', { className: 'space-y-1.5' },
-    label && React.createElement('label', { className: 'block text-sm font-medium text-gray-200' },
+  return React.createElement('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  },
+    label && React.createElement('label', {
+      style: {
+        fontSize: '13px',
+        fontWeight: '500',
+        color: colors.text.secondary,
+      },
+    },
       label,
-      required && React.createElement('span', { className: 'text-red-500 ml-1' }, '*')
+      required && React.createElement('span', { style: { color: colors.error.default, marginLeft: '4px' } }, '*')
     ),
-    React.createElement('div', { className: 'relative' },
+    React.createElement('div', { style: { position: 'relative' } },
       React.createElement('select', {
         value,
         onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value),
         disabled,
-        className: cn(
-          'w-full px-3 py-2 rounded-lg border bg-gray-800 text-gray-100 appearance-none',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
-          error ? 'border-red-500' : 'border-gray-700'
-        ),
+        style: {
+          width: '100%',
+          height: sizing.inputHeight,
+          padding: '0 36px 0 12px',
+          fontSize: '14px',
+          color: colors.text.primary,
+          backgroundColor: colors.bg.input,
+          border: `1px solid ${error ? colors.error.default : colors.border.default}`,
+          borderRadius: sizing.borderRadius,
+          outline: 'none',
+          appearance: 'none',
+          cursor: 'pointer',
+          opacity: disabled ? 0.5 : 1,
+        },
       },
         placeholder && React.createElement('option', { value: '', disabled: true }, placeholder),
-        options.map((opt) => 
+        options.map((opt) =>
           React.createElement('option', { key: opt.value, value: opt.value, disabled: opt.disabled }, opt.label)
         )
       ),
-      React.createElement('div', { className: 'absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400' },
-        React.createElement(ChevronDown, { size: 16 })
-      )
+      React.createElement('div', {
+        style: {
+          position: 'absolute',
+          right: '12px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          pointerEvents: 'none',
+          color: colors.text.muted,
+        },
+      }, React.createElement(ChevronDown, { size: 16 }))
     ),
-    error && React.createElement('p', { className: 'text-sm text-red-500' }, error)
+    error && React.createElement('p', {
+      style: { fontSize: '12px', color: colors.error.default, margin: 0 },
+    }, error)
   );
 };
 
@@ -165,71 +474,116 @@ const Select: UiKit['Select'] = ({ label, options, value, onChange, placeholder,
 // -----------------------------------------------------------------------------
 const Checkbox: UiKit['Checkbox'] = ({ label, checked, onChange, disabled }) => {
   return React.createElement('label', {
-    className: cn(
-      'flex items-center gap-3 cursor-pointer',
-      disabled && 'opacity-50 cursor-not-allowed'
-    ),
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.5 : 1,
+    },
   },
     React.createElement('input', {
       type: 'checkbox',
       checked,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.checked),
       disabled,
-      className: 'w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900',
+      style: {
+        width: '18px',
+        height: '18px',
+        accentColor: colors.primary.default,
+        cursor: 'inherit',
+      },
     }),
-    label && React.createElement('span', { className: 'text-sm text-gray-200' }, label)
+    label && React.createElement('span', {
+      style: { fontSize: '14px', color: colors.text.primary },
+    }, label)
   );
 };
 
 // -----------------------------------------------------------------------------
-// Table
+// Table - Clean, scannable data display
 // -----------------------------------------------------------------------------
-const Table: UiKit['Table'] = ({ columns, data, onRowClick, emptyMessage = 'No data', loading }) => {
+const Table: UiKit['Table'] = ({ columns, data, onRowClick, emptyMessage = 'No data found', loading }) => {
   if (loading) {
-    return React.createElement('div', { className: 'flex justify-center py-12' },
-      React.createElement(Loader2, { size: 32, className: 'animate-spin text-gray-400' })
-    );
+    return React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: '48px',
+      },
+    }, React.createElement(Loader2, {
+      size: 24,
+      style: { animation: 'spin 1s linear infinite', color: colors.text.muted },
+    }));
   }
 
   if (!data.length) {
-    return React.createElement('div', { className: 'text-center py-12 text-gray-400' }, emptyMessage);
+    return React.createElement('div', {
+      style: {
+        textAlign: 'center',
+        padding: '48px 24px',
+        color: colors.text.muted,
+        fontSize: '14px',
+      },
+    }, emptyMessage);
   }
 
-  return React.createElement('div', { className: 'overflow-x-auto' },
-    React.createElement('table', { className: 'w-full' },
+  return React.createElement('div', { style: { overflowX: 'auto' } },
+    React.createElement('table', {
+      style: {
+        width: '100%',
+        borderCollapse: 'collapse',
+      },
+    },
       React.createElement('thead', null,
-        React.createElement('tr', { className: 'border-b border-gray-800' },
+        React.createElement('tr', {
+          style: { borderBottom: `1px solid ${colors.border.subtle}` },
+        },
           columns.map((col) =>
             React.createElement('th', {
               key: col.key,
-              className: cn(
-                'px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider',
-                col.align === 'center' && 'text-center',
-                col.align === 'right' && 'text-right'
-              ),
-              style: col.width ? { width: col.width } : undefined,
+              style: {
+                padding: '12px 16px',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: colors.text.muted,
+                textAlign: col.align || 'left',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+              },
             }, col.label)
           )
         )
       ),
-      React.createElement('tbody', { className: 'divide-y divide-gray-800' },
+      React.createElement('tbody', null,
         data.map((row, rowIndex) =>
           React.createElement('tr', {
             key: rowIndex,
             onClick: onRowClick ? () => onRowClick(row, rowIndex) : undefined,
-            className: cn(
-              'transition-colors',
-              onRowClick && 'cursor-pointer hover:bg-gray-800/50'
-            ),
+            style: {
+              borderBottom: `1px solid ${colors.border.subtle}`,
+              cursor: onRowClick ? 'pointer' : 'default',
+              transition: 'background-color 150ms ease',
+            },
+            onMouseEnter: (e: React.MouseEvent<HTMLTableRowElement>) => {
+              if (onRowClick) e.currentTarget.style.backgroundColor = colors.bg.elevated;
+            },
+            onMouseLeave: (e: React.MouseEvent<HTMLTableRowElement>) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            },
           },
             columns.map((col) =>
               React.createElement('td', {
                 key: col.key,
-                className: cn(
-                  'px-4 py-3 text-sm text-gray-200',
-                  col.align === 'center' && 'text-center',
-                  col.align === 'right' && 'text-right'
-                ),
+                style: {
+                  padding: '14px 16px',
+                  fontSize: '14px',
+                  color: colors.text.primary,
+                  textAlign: col.align || 'left',
+                  verticalAlign: 'middle',
+                },
               },
                 col.render ? col.render(row[col.key], row, rowIndex) : String(row[col.key] ?? '')
               )
@@ -242,22 +596,48 @@ const Table: UiKit['Table'] = ({ columns, data, onRowClick, emptyMessage = 'No d
 };
 
 // -----------------------------------------------------------------------------
-// Badge
+// Badge - Small status indicators
 // -----------------------------------------------------------------------------
 const Badge: UiKit['Badge'] = ({ variant = 'default', children }) => {
-  const variantClasses = {
-    default: 'bg-gray-700 text-gray-200',
-    success: 'bg-green-900/50 text-green-400 border-green-800',
-    warning: 'bg-yellow-900/50 text-yellow-400 border-yellow-800',
-    error: 'bg-red-900/50 text-red-400 border-red-800',
-    info: 'bg-blue-900/50 text-blue-400 border-blue-800',
+  const styles: Record<string, React.CSSProperties> = {
+    default: {
+      backgroundColor: colors.bg.elevated,
+      color: colors.text.secondary,
+      border: `1px solid ${colors.border.default}`,
+    },
+    success: {
+      backgroundColor: colors.success.muted,
+      color: colors.success.default,
+      border: `1px solid ${colors.success.border}`,
+    },
+    warning: {
+      backgroundColor: colors.warning.muted,
+      color: colors.warning.default,
+      border: `1px solid ${colors.warning.border}`,
+    },
+    error: {
+      backgroundColor: colors.error.muted,
+      color: colors.error.default,
+      border: `1px solid ${colors.error.border}`,
+    },
+    info: {
+      backgroundColor: colors.info.muted,
+      color: colors.info.default,
+      border: `1px solid ${colors.info.border}`,
+    },
   };
 
   return React.createElement('span', {
-    className: cn(
-      'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border',
-      variantClasses[variant]
-    ),
+    style: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '2px 8px',
+      fontSize: '12px',
+      fontWeight: '500',
+      borderRadius: '4px',
+      whiteSpace: 'nowrap',
+      ...styles[variant],
+    },
   }, children);
 };
 
@@ -265,11 +645,9 @@ const Badge: UiKit['Badge'] = ({ variant = 'default', children }) => {
 // Avatar
 // -----------------------------------------------------------------------------
 const Avatar: UiKit['Avatar'] = ({ src, name, size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-10 h-10 text-sm',
-    lg: 'w-12 h-12 text-base',
-  };
+  const sizes = { sm: 28, md: 36, lg: 44 };
+  const fontSize = { sm: '11px', md: '13px', lg: '15px' };
+  const dim = sizes[size];
 
   const initials = name
     ?.split(' ')
@@ -282,47 +660,83 @@ const Avatar: UiKit['Avatar'] = ({ src, name, size = 'md' }) => {
     return React.createElement('img', {
       src,
       alt: name || 'Avatar',
-      className: cn('rounded-full object-cover', sizeClasses[size]),
+      style: {
+        width: dim,
+        height: dim,
+        borderRadius: '50%',
+        objectFit: 'cover',
+      },
     });
   }
 
   return React.createElement('div', {
-    className: cn(
-      'rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium',
-      sizeClasses[size]
-    ),
+    style: {
+      width: dim,
+      height: dim,
+      borderRadius: '50%',
+      background: `linear-gradient(135deg, ${colors.primary.default}, #8b5cf6)`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#ffffff',
+      fontSize: fontSize[size],
+      fontWeight: '600',
+    },
   }, initials || '?');
 };
 
 // -----------------------------------------------------------------------------
-// Alert
+// Alert - Prominent notifications
 // -----------------------------------------------------------------------------
 const Alert: UiKit['Alert'] = ({ variant, title, onClose, children }) => {
-  const variantConfig = {
-    success: { bg: 'bg-green-900/30', border: 'border-green-800', text: 'text-green-400', Icon: CheckCircle },
-    warning: { bg: 'bg-yellow-900/30', border: 'border-yellow-800', text: 'text-yellow-400', Icon: AlertTriangle },
-    error: { bg: 'bg-red-900/30', border: 'border-red-800', text: 'text-red-400', Icon: AlertCircle },
-    info: { bg: 'bg-blue-900/30', border: 'border-blue-800', text: 'text-blue-400', Icon: Info },
+  const config = {
+    success: { Icon: CheckCircle, bg: colors.success.muted, border: colors.success.border, color: colors.success.default },
+    warning: { Icon: AlertTriangle, bg: colors.warning.muted, border: colors.warning.border, color: colors.warning.default },
+    error: { Icon: AlertCircle, bg: colors.error.muted, border: colors.error.border, color: colors.error.default },
+    info: { Icon: Info, bg: colors.info.muted, border: colors.info.border, color: colors.info.default },
   };
 
-  const config = variantConfig[variant];
+  const { Icon, bg, border, color } = config[variant];
 
   return React.createElement('div', {
-    className: cn('rounded-lg border p-4', config.bg, config.border),
+    style: {
+      display: 'flex',
+      gap: '12px',
+      padding: '16px',
+      backgroundColor: bg,
+      border: `1px solid ${border}`,
+      borderRadius: sizing.borderRadius,
+    },
   },
-    React.createElement('div', { className: 'flex gap-3' },
-      React.createElement(config.Icon, { size: 20, className: config.text }),
-      React.createElement('div', { className: 'flex-1' },
-        title && React.createElement('h3', { className: cn('font-medium mb-1', config.text) }, title),
-        React.createElement('div', { className: 'text-sm text-gray-300' }, children)
-      ),
-      onClose && React.createElement('button', {
-        onClick: onClose,
-        className: 'text-gray-400 hover:text-gray-200 transition-colors',
+    React.createElement(Icon, { size: 20, style: { color, flexShrink: 0, marginTop: '1px' } }),
+    React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+      title && React.createElement('h4', {
+        style: {
+          fontSize: '14px',
+          fontWeight: '600',
+          color,
+          margin: '0 0 4px 0',
+        },
+      }, title),
+      React.createElement('div', {
+        style: {
+          fontSize: '14px',
+          color: colors.text.primary,
+          lineHeight: '1.5',
+        },
+      }, children)
+    ),
+    onClose && React.createElement('button', {
+      onClick: onClose,
+      style: {
+        background: 'none',
+        border: 'none',
+        padding: '4px',
+        cursor: 'pointer',
+        color: colors.text.muted,
+        flexShrink: 0,
       },
-        React.createElement(X, { size: 16 })
-      )
-    )
+    }, React.createElement(X, { size: 16 }))
   );
 };
 
@@ -332,43 +746,91 @@ const Alert: UiKit['Alert'] = ({ variant, title, onClose, children }) => {
 const Modal: UiKit['Modal'] = ({ open, onClose, title, description, size = 'md', children }) => {
   if (!open) return null;
 
-  const sizeClasses = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-xl',
-  };
+  const widths = { sm: '400px', md: '500px', lg: '640px', xl: '800px' };
 
-  return React.createElement('div', { className: 'fixed inset-0 z-50 flex items-center justify-center' },
+  return React.createElement('div', {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+    },
+  },
     // Backdrop
     React.createElement('div', {
-      className: 'absolute inset-0 bg-black/60',
       onClick: onClose,
+      style: {
+        position: 'absolute',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+      },
     }),
     // Content
     React.createElement('div', {
-      className: cn(
-        'relative w-full mx-4 bg-gray-900 border border-gray-800 rounded-lg shadow-2xl',
-        sizeClasses[size]
-      ),
+      style: {
+        position: 'relative',
+        width: '100%',
+        maxWidth: widths[size],
+        maxHeight: 'calc(100vh - 48px)',
+        backgroundColor: colors.bg.surface,
+        border: `1px solid ${colors.border.subtle}`,
+        borderRadius: sizing.borderRadiusLg,
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      },
     },
       // Header
-      (title || description) && React.createElement('div', { className: 'px-6 py-4 border-b border-gray-800' },
-        React.createElement('div', { className: 'flex items-start justify-between gap-4' },
-          React.createElement('div', null,
-            title && React.createElement('h2', { className: 'text-lg font-semibold text-gray-100' }, title),
-            description && React.createElement('p', { className: 'text-sm text-gray-400 mt-1' }, description)
-          ),
-          React.createElement('button', {
-            onClick: onClose,
-            className: 'text-gray-400 hover:text-gray-200 transition-colors',
+      (title || description) && React.createElement('div', {
+        style: {
+          padding: '20px 24px',
+          borderBottom: `1px solid ${colors.border.subtle}`,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '16px',
+        },
+      },
+        React.createElement('div', null,
+          title && React.createElement('h2', {
+            style: {
+              fontSize: '18px',
+              fontWeight: '600',
+              color: colors.text.primary,
+              margin: 0,
+            },
+          }, title),
+          description && React.createElement('p', {
+            style: {
+              fontSize: '14px',
+              color: colors.text.secondary,
+              margin: '4px 0 0 0',
+            },
+          }, description)
+        ),
+        React.createElement('button', {
+          onClick: onClose,
+          style: {
+            background: 'none',
+            border: 'none',
+            padding: '4px',
+            cursor: 'pointer',
+            color: colors.text.muted,
+            borderRadius: '4px',
           },
-            React.createElement(X, { size: 20 })
-          )
-        )
+        }, React.createElement(X, { size: 20 }))
       ),
       // Body
-      React.createElement('div', { className: 'px-6 py-4' }, children)
+      React.createElement('div', {
+        style: {
+          padding: '24px',
+          overflowY: 'auto',
+        },
+      }, children)
     )
   );
 };
@@ -377,15 +839,13 @@ const Modal: UiKit['Modal'] = ({ open, onClose, title, description, size = 'md',
 // Spinner
 // -----------------------------------------------------------------------------
 const Spinner: UiKit['Spinner'] = ({ size = 'md' }) => {
-  const sizeClasses = {
-    sm: 16,
-    md: 24,
-    lg: 32,
-  };
-
+  const sizes = { sm: 16, md: 24, lg: 32 };
   return React.createElement(Loader2, {
-    size: sizeClasses[size],
-    className: 'animate-spin text-blue-500',
+    size: sizes[size],
+    style: {
+      animation: 'spin 1s linear infinite',
+      color: colors.primary.default,
+    },
   });
 };
 
@@ -393,10 +853,38 @@ const Spinner: UiKit['Spinner'] = ({ size = 'md' }) => {
 // EmptyState
 // -----------------------------------------------------------------------------
 const EmptyState: UiKit['EmptyState'] = ({ icon, title, description, action }) => {
-  return React.createElement('div', { className: 'text-center py-12' },
-    icon && React.createElement('div', { className: 'flex justify-center mb-4 text-gray-500' }, icon),
-    React.createElement('h3', { className: 'text-lg font-medium text-gray-200 mb-2' }, title),
-    description && React.createElement('p', { className: 'text-gray-400 mb-6 max-w-md mx-auto' }, description),
+  return React.createElement('div', {
+    style: {
+      textAlign: 'center',
+      padding: '48px 24px',
+    },
+  },
+    icon && React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'center',
+        marginBottom: '16px',
+        color: colors.text.muted,
+      },
+    }, icon),
+    React.createElement('h3', {
+      style: {
+        fontSize: '16px',
+        fontWeight: '600',
+        color: colors.text.primary,
+        margin: '0 0 8px 0',
+      },
+    }, title),
+    description && React.createElement('p', {
+      style: {
+        fontSize: '14px',
+        color: colors.text.secondary,
+        margin: '0 0 24px 0',
+        maxWidth: '400px',
+        marginLeft: 'auto',
+        marginRight: 'auto',
+      },
+    }, description),
     action
   );
 };
@@ -408,30 +896,34 @@ const Tabs: UiKit['Tabs'] = ({ tabs, activeTab, onChange }) => {
   const currentTab = activeTab || tabs[0]?.id;
 
   return React.createElement('div', null,
-    // Tab headers
-    React.createElement('div', { className: 'flex gap-1 border-b border-gray-800' },
+    React.createElement('div', {
+      style: {
+        display: 'flex',
+        gap: '4px',
+        borderBottom: `1px solid ${colors.border.subtle}`,
+        marginBottom: '20px',
+      },
+    },
       tabs.map((tab) =>
         React.createElement('button', {
           key: tab.id,
           onClick: () => onChange?.(tab.id),
-          className: cn(
-            'px-4 py-2 text-sm font-medium transition-colors relative',
-            currentTab === tab.id
-              ? 'text-blue-500'
-              : 'text-gray-400 hover:text-gray-200'
-          ),
-        },
-          tab.label,
-          currentTab === tab.id && React.createElement('div', {
-            className: 'absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500',
-          })
-        )
+          style: {
+            padding: '12px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: currentTab === tab.id ? colors.primary.default : colors.text.secondary,
+            background: 'none',
+            border: 'none',
+            borderBottom: currentTab === tab.id ? `2px solid ${colors.primary.default}` : '2px solid transparent',
+            marginBottom: '-1px',
+            cursor: 'pointer',
+            transition: 'all 150ms ease',
+          },
+        }, tab.label)
       )
     ),
-    // Tab content
-    React.createElement('div', { className: 'py-4' },
-      tabs.find((tab) => tab.id === currentTab)?.content
-    )
+    tabs.find((tab) => tab.id === currentTab)?.content
   );
 };
 
@@ -441,18 +933,34 @@ const Tabs: UiKit['Tabs'] = ({ tabs, activeTab, onChange }) => {
 const Dropdown: UiKit['Dropdown'] = ({ trigger, items, align = 'left' }) => {
   const [open, setOpen] = React.useState(false);
 
-  return React.createElement('div', { className: 'relative inline-block' },
-    React.createElement('div', { onClick: () => setOpen(!open) }, trigger),
+  return React.createElement('div', { style: { position: 'relative', display: 'inline-block' } },
+    React.createElement('div', {
+      onClick: () => setOpen(!open),
+      style: { cursor: 'pointer' },
+    }, trigger),
     open && React.createElement(React.Fragment, null,
       React.createElement('div', {
-        className: 'fixed inset-0 z-40',
         onClick: () => setOpen(false),
+        style: {
+          position: 'fixed',
+          inset: 0,
+          zIndex: 40,
+        },
       }),
       React.createElement('div', {
-        className: cn(
-          'absolute z-50 mt-2 min-w-[160px] bg-gray-900 border border-gray-800 rounded-lg shadow-xl py-1',
-          align === 'right' ? 'right-0' : 'left-0'
-        ),
+        style: {
+          position: 'absolute',
+          top: '100%',
+          [align === 'right' ? 'right' : 'left']: 0,
+          marginTop: '4px',
+          minWidth: '180px',
+          backgroundColor: colors.bg.surface,
+          border: `1px solid ${colors.border.default}`,
+          borderRadius: sizing.borderRadius,
+          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+          zIndex: 50,
+          overflow: 'hidden',
+        },
       },
         items.map((item, idx) =>
           React.createElement('button', {
@@ -464,13 +972,29 @@ const Dropdown: UiKit['Dropdown'] = ({ trigger, items, align = 'left' }) => {
               }
             },
             disabled: item.disabled,
-            className: cn(
-              'w-full flex items-center gap-2 px-4 py-2 text-sm text-left transition-colors',
-              item.disabled && 'opacity-50 cursor-not-allowed',
-              item.danger
-                ? 'text-red-400 hover:bg-red-900/30'
-                : 'text-gray-200 hover:bg-gray-800'
-            ),
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              padding: '10px 14px',
+              fontSize: '14px',
+              color: item.danger ? colors.error.default : colors.text.primary,
+              background: 'none',
+              border: 'none',
+              cursor: item.disabled ? 'not-allowed' : 'pointer',
+              opacity: item.disabled ? 0.5 : 1,
+              textAlign: 'left',
+              transition: 'background-color 150ms ease',
+            },
+            onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
+              if (!item.disabled) {
+                e.currentTarget.style.backgroundColor = item.danger ? colors.error.muted : colors.bg.elevated;
+              }
+            },
+            onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            },
           },
             item.icon,
             item.label
