@@ -309,6 +309,11 @@ interface DashboardShellProps {
   initialNotifications?: Notification[];
 }
 
+// Module-level cache to persist state across client-side navigations
+// This is populated AFTER first hydration, so subsequent navigations are instant
+let menuStateCache: { loaded: boolean; open: boolean } = { loaded: false, open: true };
+let hitConfigCache: any | null = null;
+
 export function DashboardShell({
   children,
   config: configProp = {},
@@ -319,36 +324,48 @@ export function DashboardShell({
   onLogout,
   initialNotifications = [],
 }: DashboardShellProps) {
-  // Start with false to avoid hydration mismatch, then load from localStorage
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [hasHydrated, setHasHydrated] = useState(false);
+  // Use cached value if available (for client-side navigation), otherwise default to true
+  // This ensures server and initial client render match (both true)
+  const [menuOpen, setMenuOpenState] = useState(() => menuStateCache.loaded ? menuStateCache.open : true);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  const [hitConfig, setHitConfig] = useState<any | null>(null);
+  const [hitConfig, setHitConfig] = useState<any | null>(hitConfigCache);
 
-  // Load persisted menu state from localStorage after hydration
-  useEffect(() => {
-    // Load hit-config.json for feature flags
-    fetch('/hit-config.json')
-      .then((res) => res.json())
-      .then((data) => setHitConfig(data))
-      .catch(() => setHitConfig(null));
-
-    const saved = localStorage.getItem('dashboard-shell-menu-open');
-    if (saved === 'true') {
-      setMenuOpen(true);
+  // Wrapper to update both state and cache
+  const setMenuOpen = useCallback((open: boolean) => {
+    menuStateCache = { loaded: true, open };
+    setMenuOpenState(open);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard-shell-menu-open', String(open));
     }
-    setHasHydrated(true);
   }, []);
 
-  // Persist menu state to localStorage whenever it changes (only after hydration)
+  // On first mount, load from localStorage and update cache
   useEffect(() => {
-    if (hasHydrated) {
-      localStorage.setItem('dashboard-shell-menu-open', String(menuOpen));
+    // Only load from localStorage if we haven't cached yet
+    if (!menuStateCache.loaded) {
+      const saved = localStorage.getItem('dashboard-shell-menu-open');
+      const savedValue = saved !== 'false'; // default to true
+      menuStateCache = { loaded: true, open: savedValue };
+      // Only update state if different from default
+      if (!savedValue) {
+        setMenuOpenState(false);
+      }
     }
-  }, [menuOpen, hasHydrated]);
+
+    // Load hit-config.json once
+    if (!hitConfigCache) {
+      fetch('/hit-config.json')
+        .then((res) => res.json())
+        .then((data) => {
+          hitConfigCache = data;
+          setHitConfig(data);
+        })
+        .catch(() => setHitConfig(null));
+    }
+  }, []);
 
   const config: ShellConfig = {
     brandName: configProp.brandName || 'HIT',
@@ -404,6 +421,9 @@ export function DashboardShell({
     transition: 'all 150ms ease',
   };
 
+  // Use menu state directly (cached across navigations)
+  const showSidebar = menuOpen;
+
   return (
     <ShellContext.Provider value={contextValue}>
       <div
@@ -417,13 +437,11 @@ export function DashboardShell({
         {/* Sidebar - pushes content over when open */}
         <aside
           style={{
-            width: menuOpen ? '280px' : '0px',
-            minWidth: menuOpen ? '280px' : '0px',
+            width: showSidebar ? '280px' : '0px',
+            minWidth: showSidebar ? '280px' : '0px',
             height: '100%',
             backgroundColor: colors.bg.sidebar,
-            borderRight: menuOpen ? `1px solid ${colors.border.subtle}` : 'none',
-            // Only animate after hydration to prevent flash
-            transition: hasHydrated ? 'width 300ms ease, min-width 300ms ease' : 'none',
+            borderRight: showSidebar ? `1px solid ${colors.border.subtle}` : 'none',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -538,7 +556,7 @@ export function DashboardShell({
         </aside>
 
         {/* Main Content */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: hasHydrated ? 'margin 300ms ease' : 'none' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Top Bar */}
           <header
             style={{
@@ -554,7 +572,7 @@ export function DashboardShell({
           >
             {/* Left side - only show hamburger when sidebar is closed */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {!menuOpen && (
+              {!showSidebar && (
                 <button
                   onClick={() => setMenuOpen(true)}
                   style={iconButtonStyle}
