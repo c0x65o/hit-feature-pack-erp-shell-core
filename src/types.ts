@@ -11,6 +11,8 @@ export interface NavItem {
   label: string;
   path?: string;
   icon?: string;
+  /** Optional feature flag name to gate visibility */
+  featureFlag?: string;
   roles?: string[];
   showWhen?: 'authenticated' | 'unauthenticated' | 'always';
   children?: Omit<NavItem, 'children'>[];

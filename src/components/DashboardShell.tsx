@@ -110,6 +110,49 @@ function groupNavItems(items: NavItem[]): { group: string; label: string; items:
 }
 
 // =============================================================================
+// FEATURE FLAG HELPERS
+// =============================================================================
+
+function isFlagEnabled(flag?: string, cfg?: any): boolean {
+  if (!flag) return true;
+  const auth = cfg?.auth || {};
+  const admin = cfg?.admin || {};
+  const lookup: Record<string, boolean | undefined> = {
+    'auth.allowSignup': auth.allowSignup,
+    'auth.emailVerification': auth.emailVerification,
+    'auth.passwordLogin': auth.passwordLogin,
+    'auth.magicLinkLogin': auth.magicLinkLogin,
+    'auth.twoFactorAuth': auth.twoFactorAuth,
+    'auth.show2faSetup': auth.show2faSetup,
+    'auth.showSocialLogin': auth.showSocialLogin,
+    'admin.showDashboard': admin.showDashboard,
+    'admin.showUsers': admin.showUsers,
+    'admin.showSessions': admin.showSessions,
+    'admin.showAuditLog': admin.showAuditLog,
+    'admin.showInvites': admin.showInvites,
+    'admin.showPermissions': admin.showPermissions,
+    'admin.showSettings': admin.showSettings,
+  };
+  const value = lookup[flag];
+  return value !== undefined ? value : true;
+}
+
+function filterNavByFlags(items: NavItem[], cfg?: any): NavItem[] {
+  return items
+    .filter((item) => isFlagEnabled(item.featureFlag, cfg))
+    .map((item) => {
+      if (!item.children) {
+        return item;
+      }
+      const children = filterNavByFlags(item.children as NavItem[], cfg);
+      return {
+        ...item,
+        children: children.length > 0 ? children : undefined,
+      } as NavItem;
+    });
+}
+
+// =============================================================================
 // NAV ITEM COMPONENT
 // =============================================================================
 
@@ -283,9 +326,16 @@ export function DashboardShell({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [hitConfig, setHitConfig] = useState<any | null>(null);
 
   // Load persisted menu state from localStorage after hydration
   useEffect(() => {
+    // Load hit-config.json for feature flags
+    fetch('/hit-config.json')
+      .then((res) => res.json())
+      .then((data) => setHitConfig(data))
+      .catch(() => setHitConfig(null));
+
     const saved = localStorage.getItem('dashboard-shell-menu-open');
     if (saved === 'true') {
       setMenuOpen(true);
@@ -449,7 +499,7 @@ export function DashboardShell({
               minWidth: '280px',
             }}
           >
-            {groupNavItems(navItems).map((group) => (
+            {groupNavItems(filterNavByFlags(navItems, hitConfig)).map((group) => (
               <div key={group.group}>
                 <NavGroupHeader label={group.label} />
                 {group.items.map((item) => (
