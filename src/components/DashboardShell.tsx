@@ -294,26 +294,8 @@ function ShellContent({
   const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
   const [mounted, setMounted] = useState(false);
 
-  const [menuOpen, setMenuOpenState] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dashboard-shell-menu-open');
-      return saved !== 'false';
-    }
-    return true;
-  });
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dashboard-shell-expanded-nodes');
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved));
-        } catch {
-          return new Set();
-        }
-      }
-    }
-    return new Set();
-  });
+  const [menuOpen, setMenuOpenState] = useState(true);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications] = useState<Notification[]>(initialNotifications);
@@ -339,11 +321,28 @@ function ShellContent({
       .catch(() => setAuthConfig(null));
   }, []);
 
+  // Load persisted state from localStorage on mount
   useEffect(() => {
     setMounted(true);
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-theme', 'dark');
       document.documentElement.classList.add('dark');
+    }
+    if (typeof window !== 'undefined') {
+      // Restore menu open state
+      const savedMenuOpen = localStorage.getItem('dashboard-shell-menu-open');
+      if (savedMenuOpen !== null) {
+        setMenuOpenState(savedMenuOpen !== 'false');
+      }
+      // Restore expanded nodes
+      const savedNodes = localStorage.getItem('dashboard-shell-expanded-nodes');
+      if (savedNodes) {
+        try {
+          setExpandedNodes(new Set(JSON.parse(savedNodes)));
+        } catch {
+          // Invalid JSON, ignore
+        }
+      }
     }
   }, []);
 
