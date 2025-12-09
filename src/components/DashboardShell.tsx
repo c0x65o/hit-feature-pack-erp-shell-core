@@ -292,6 +292,7 @@ function ShellContent({
   initialNotifications,
 }: ShellContentProps) {
   const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
+  const [mounted, setMounted] = useState(false);
 
   const [menuOpen, setMenuOpenState] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -300,7 +301,19 @@ function ShellContent({
     }
     return true;
   });
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dashboard-shell-expanded-nodes');
+      if (saved) {
+        try {
+          return new Set(JSON.parse(saved));
+        } catch {
+          return new Set();
+        }
+      }
+    }
+    return new Set();
+  });
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications] = useState<Notification[]>(initialNotifications);
@@ -327,6 +340,7 @@ function ShellContent({
   }, []);
 
   useEffect(() => {
+    setMounted(true);
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-theme', 'dark');
       document.documentElement.classList.add('dark');
@@ -340,6 +354,10 @@ function ShellContent({
         next.delete(nodeId);
       } else {
         next.add(nodeId);
+      }
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dashboard-shell-expanded-nodes', JSON.stringify([...next]));
       }
       return next;
     });
@@ -369,6 +387,18 @@ function ShellContent({
   };
 
   const showSidebar = menuOpen;
+
+  // Prevent flash of unstyled content during hydration
+  if (!mounted) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        height: '100vh', 
+        backgroundColor: '#0f0f0f',
+        color: '#fff',
+      }} />
+    );
+  }
 
   return (
     <ShellContext.Provider value={contextValue}>

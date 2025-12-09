@@ -178,6 +178,7 @@ function NavGroupHeader({ label }) {
 }
 function ShellContent({ children, config, navItems, user, activePath, onNavigate, onLogout, initialNotifications, }) {
     const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
+    const [mounted, setMounted] = useState(false);
     const [menuOpen, setMenuOpenState] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('dashboard-shell-menu-open');
@@ -185,7 +186,20 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         }
         return true;
     });
-    const [expandedNodes, setExpandedNodes] = useState(new Set());
+    const [expandedNodes, setExpandedNodes] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('dashboard-shell-expanded-nodes');
+            if (saved) {
+                try {
+                    return new Set(JSON.parse(saved));
+                }
+                catch {
+                    return new Set();
+                }
+            }
+        }
+        return new Set();
+    });
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [notifications] = useState(initialNotifications);
@@ -208,6 +222,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             .catch(() => setAuthConfig(null));
     }, []);
     useEffect(() => {
+        setMounted(true);
         if (typeof document !== 'undefined') {
             document.documentElement.setAttribute('data-theme', 'dark');
             document.documentElement.classList.add('dark');
@@ -221,6 +236,10 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             }
             else {
                 next.add(nodeId);
+            }
+            // Persist to localStorage
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('dashboard-shell-expanded-nodes', JSON.stringify([...next]));
             }
             return next;
         });
@@ -246,6 +265,15 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         transition: 'all 150ms ease',
     };
     const showSidebar = menuOpen;
+    // Prevent flash of unstyled content during hydration
+    if (!mounted) {
+        return (_jsx("div", { style: {
+                display: 'flex',
+                height: '100vh',
+                backgroundColor: '#0f0f0f',
+                color: '#fff',
+            } }));
+    }
     return (_jsx(ShellContext.Provider, { value: contextValue, children: _jsxs("div", { style: styles({
                 display: 'flex',
                 height: '100vh',
