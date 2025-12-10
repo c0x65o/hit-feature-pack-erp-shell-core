@@ -210,8 +210,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const [expandedNodes, setExpandedNodes] = useState(new Set());
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [settingsTab, setSettingsTab] = useState('appearance');
+    const [showAppearanceModal, setShowAppearanceModal] = useState(false);
+    const [showProfileModal, setShowProfileModal] = useState(false);
     const [notifications] = useState(initialNotifications);
     const [hitConfig, setHitConfig] = useState(null);
     const [currentUser, setCurrentUser] = useState(user);
@@ -324,14 +324,23 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             return next;
         });
     }, []);
-    const openSettings = useCallback((tab) => {
-        setSettingsTab(tab);
-        setShowSettingsModal(true);
+    const openAppearance = useCallback(() => {
+        setShowAppearanceModal(true);
+        setShowProfileModal(false);
         setShowProfileMenu(false);
         setShowNotifications(false);
     }, []);
-    const closeSettings = useCallback(() => {
-        setShowSettingsModal(false);
+    const closeAppearance = useCallback(() => {
+        setShowAppearanceModal(false);
+    }, []);
+    const openProfileModal = useCallback(() => {
+        setShowProfileModal(true);
+        setShowAppearanceModal(false);
+        setShowProfileMenu(false);
+        setShowNotifications(false);
+    }, []);
+    const closeProfileModal = useCallback(() => {
+        setShowProfileModal(false);
         setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
     }, []);
     const fetchProfile = useCallback(async () => {
@@ -421,10 +430,10 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         profileMetadata,
     ]);
     useEffect(() => {
-        if (showSettingsModal && settingsTab === 'profile' && !profileLoaded && !profileStatus.saving) {
+        if (showProfileModal && !profileLoaded && !profileStatus.saving) {
             fetchProfile();
         }
-    }, [fetchProfile, profileLoaded, profileStatus.saving, settingsTab, showSettingsModal]);
+    }, [fetchProfile, profileLoaded, profileStatus.saving, showProfileModal]);
     const unreadCount = notifications.filter((n) => !n.read).length;
     const contextValue = {
         menuOpen,
@@ -445,10 +454,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         cursor: 'pointer',
         transition: 'all 150ms ease',
     };
-    const settingsTabs = [
-        { key: 'appearance', label: 'Appearance' },
-        { key: 'profile', label: 'Profile' },
-    ];
     const showSidebar = menuOpen;
     // Prevent flash of unstyled content during hydration
     if (!mounted) {
@@ -516,7 +521,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                     justifyContent: 'space-between',
                                     padding: `0 ${spacing['2xl']}`,
                                     flexShrink: 0,
-                                }), children: [_jsx("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.lg }), children: !showSidebar && (_jsx("button", { onClick: () => setMenuOpen(true), style: iconButtonStyle, children: _jsx(Menu, { size: 20 }) })) }), _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm }), children: [config.showThemeToggle && (_jsx("button", { onClick: () => openSettings('appearance'), style: iconButtonStyle, "aria-label": "Theme settings", children: resolvedTheme === 'dark' ? _jsx(Moon, { size: 20 }) : _jsx(Sun, { size: 20 }) })), config.showNotifications && (_jsx("div", { style: { position: 'relative' }, children: _jsxs("button", { onClick: () => { setShowNotifications(!showNotifications); setShowProfileMenu(false); }, style: iconButtonStyle, children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && (_jsx("span", { style: styles({
+                                }), children: [_jsx("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.lg }), children: !showSidebar && (_jsx("button", { onClick: () => setMenuOpen(true), style: iconButtonStyle, children: _jsx(Menu, { size: 20 }) })) }), _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm }), children: [config.showThemeToggle && (_jsx("button", { onClick: openAppearance, style: iconButtonStyle, "aria-label": "Theme settings", children: resolvedTheme === 'dark' ? _jsx(Moon, { size: 20 }) : _jsx(Sun, { size: 20 }) })), config.showNotifications && (_jsx("div", { style: { position: 'relative' }, children: _jsxs("button", { onClick: () => { setShowNotifications(!showNotifications); setShowProfileMenu(false); }, style: iconButtonStyle, children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && (_jsx("span", { style: styles({
                                                                 position: 'absolute',
                                                                 top: '4px',
                                                                 right: '4px',
@@ -559,7 +564,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     boxShadow: shadows.xl,
                                                                     zIndex: 50,
                                                                     overflow: 'hidden',
-                                                                }), children: [_jsxs("div", { style: styles({ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${colors.border.subtle}` }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || '' })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: () => openSettings('profile'), style: styles({
+                                                                }), children: [_jsxs("div", { style: styles({ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${colors.border.subtle}` }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || '' })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,
@@ -572,7 +577,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                                     fontSize: ts.body.fontSize,
                                                                                     cursor: 'pointer',
                                                                                     textAlign: 'left',
-                                                                                }), children: [_jsx(User, { size: 16, style: { color: colors.text.muted } }), "Profile"] }), _jsxs("button", { onClick: () => openSettings('appearance'), style: styles({
+                                                                                }), children: [_jsx(User, { size: 16, style: { color: colors.text.muted } }), "Profile"] }), _jsxs("button", { onClick: openAppearance, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,
@@ -603,7 +608,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                     overflow: 'auto',
                                     padding: spacing['2xl'],
                                     backgroundColor: colors.bg.page,
-                                }), onClick: () => { setShowNotifications(false); setShowProfileMenu(false); }, children: _jsx("div", { style: styles({ maxWidth: '1280px', margin: '0 auto' }), children: _jsx(UiKitProvider, { kit: erpKit, children: children }) }) })] })] }), showSettingsModal && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: closeSettings, style: styles({
+                                }), onClick: () => { setShowNotifications(false); setShowProfileMenu(false); }, children: _jsx("div", { style: styles({ maxWidth: '1280px', margin: '0 auto' }), children: _jsx(UiKitProvider, { kit: erpKit, children: children }) }) })] })] }), showAppearanceModal && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: closeAppearance, style: styles({
                             position: 'fixed',
                             inset: 0,
                             backgroundColor: 'rgba(0,0,0,0.55)',
@@ -630,98 +635,114 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                         justifyContent: 'space-between',
                                         padding: `${spacing.lg} ${spacing.xl}`,
                                         borderBottom: `1px solid ${colors.border.subtle}`,
-                                    }), children: [_jsxs("div", { children: [_jsx("div", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight }), children: "User Settings" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Manage your appearance and account details. Changes stay on this device unless saved." })] }), _jsx("button", { onClick: closeSettings, style: {
+                                    }), children: [_jsxs("div", { children: [_jsx("div", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight }), children: "Appearance" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Switch between light, dark, or system. We save your choice in a cookie and localStorage." })] }), _jsx("button", { onClick: closeAppearance, style: {
                                                 ...iconButtonStyle,
                                                 width: '36px',
                                                 height: '36px',
                                                 backgroundColor: colors.bg.muted,
-                                            }, "aria-label": "Close settings", children: _jsx(X, { size: 18 }) })] }), _jsx("div", { style: styles({
+                                            }, "aria-label": "Close appearance settings", children: _jsx(X, { size: 18 }) })] }), _jsx("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.xl }), children: _jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsx("div", { style: styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize }), children: "Theme" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Switch between light and dark. We store your choice in a cookie and localStorage so it sticks across visits." }), _jsx("div", { style: styles({ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: spacing.md }), children: [
+                                                    { value: 'light', label: 'Light', icon: _jsx(Sun, { size: 16 }) },
+                                                    { value: 'dark', label: 'Dark', icon: _jsx(Moon, { size: 16 }) },
+                                                    { value: 'system', label: 'System', icon: _jsx(Monitor, { size: 16 }) },
+                                                ].map((option) => {
+                                                    const active = themePreference === option.value;
+                                                    return (_jsxs("button", { onClick: () => applyThemePreference(option.value), style: styles({
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: spacing.sm,
+                                                            padding: `${spacing.md} ${spacing.lg}`,
+                                                            borderRadius: radius.lg,
+                                                            border: `1px solid ${active ? colors.border.strong : colors.border.subtle}`,
+                                                            backgroundColor: active ? colors.bg.muted : colors.bg.page,
+                                                            cursor: 'pointer',
+                                                            textAlign: 'left',
+                                                            color: colors.text.primary,
+                                                            boxShadow: active ? shadows.md : 'none',
+                                                        }), children: [_jsx("span", { style: styles({
+                                                                    width: '32px',
+                                                                    height: '32px',
+                                                                    borderRadius: radius.full,
+                                                                    backgroundColor: active ? colors.bg.muted : colors.bg.surface,
+                                                                    display: 'grid',
+                                                                    placeItems: 'center',
+                                                                    color: active ? colors.primary.default : colors.text.secondary,
+                                                                }), children: option.icon }), _jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.px }), children: [_jsx("span", { style: styles({ fontWeight: ts.label.fontWeight }), children: option.label }), _jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: option.value === 'system' ? 'Match your device preference' : `Force ${option.label.toLowerCase()} mode` })] })] }, option.value));
+                                                }) }), _jsxs("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary }), children: ["Using ", _jsx("strong", { children: resolvedTheme }), " theme (preference: ", themePreference, ")."] })] }) })] }) })] })), showProfileModal && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: closeProfileModal, style: styles({
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(0,0,0,0.55)',
+                            backdropFilter: 'blur(4px)',
+                            zIndex: 90,
+                        }) }), _jsx("div", { style: styles({
+                            position: 'fixed',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: spacing['2xl'],
+                            zIndex: 100,
+                        }), children: _jsxs("div", { style: styles({
+                                width: 'min(640px, 100%)',
+                                backgroundColor: colors.bg.surface,
+                                borderRadius: radius.xl,
+                                border: `1px solid ${colors.border.default}`,
+                                boxShadow: shadows.xl,
+                                overflow: 'hidden',
+                            }), children: [_jsxs("div", { style: styles({
                                         display: 'flex',
-                                        gap: spacing.sm,
-                                        padding: `${spacing.sm} ${spacing.xl}`,
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: `${spacing.lg} ${spacing.xl}`,
                                         borderBottom: `1px solid ${colors.border.subtle}`,
-                                    }), children: settingsTabs.map((tab) => {
-                                        const active = settingsTab === tab.key;
-                                        return (_jsx("button", { onClick: () => setSettingsTab(tab.key), style: styles({
-                                                padding: `${spacing.sm} ${spacing.md}`,
-                                                borderRadius: radius.lg,
-                                                border: 'none',
-                                                backgroundColor: active ? colors.bg.muted : 'transparent',
-                                                color: active ? colors.text.primary : colors.text.secondary,
-                                                fontWeight: active ? ts.label.fontWeight : ts.body.fontWeight,
-                                                cursor: 'pointer',
-                                            }), children: tab.label }, tab.key));
-                                    }) }), _jsxs("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.xl }), children: [settingsTab === 'appearance' && (_jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsx("div", { style: styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize }), children: "Theme" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Switch between light and dark. We store your choice in a cookie and localStorage so it sticks across visits." }), _jsx("div", { style: styles({ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: spacing.md }), children: [
-                                                        { value: 'light', label: 'Light', icon: _jsx(Sun, { size: 16 }) },
-                                                        { value: 'dark', label: 'Dark', icon: _jsx(Moon, { size: 16 }) },
-                                                        { value: 'system', label: 'System', icon: _jsx(Monitor, { size: 16 }) },
-                                                    ].map((option) => {
-                                                        const active = themePreference === option.value;
-                                                        return (_jsxs("button", { onClick: () => applyThemePreference(option.value), style: styles({
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: spacing.sm,
-                                                                padding: `${spacing.md} ${spacing.lg}`,
-                                                                borderRadius: radius.lg,
-                                                                border: `1px solid ${active ? colors.border.strong : colors.border.subtle}`,
-                                                                backgroundColor: active ? colors.bg.muted : colors.bg.page,
-                                                                cursor: 'pointer',
-                                                                textAlign: 'left',
-                                                                color: colors.text.primary,
-                                                                boxShadow: active ? shadows.md : 'none',
-                                                            }), children: [_jsx("span", { style: styles({
-                                                                        width: '32px',
-                                                                        height: '32px',
-                                                                        borderRadius: radius.full,
-                                                                        backgroundColor: active ? colors.bg.muted : colors.bg.surface,
-                                                                        display: 'grid',
-                                                                        placeItems: 'center',
-                                                                        color: active ? colors.primary.default : colors.text.secondary,
-                                                                    }), children: option.icon }), _jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.px }), children: [_jsx("span", { style: styles({ fontWeight: ts.label.fontWeight }), children: option.label }), _jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: option.value === 'system' ? 'Match your device preference' : `Force ${option.label.toLowerCase()} mode` })] })] }, option.value));
-                                                    }) }), _jsxs("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary }), children: ["Using ", _jsx("strong", { children: resolvedTheme }), " theme (preference: ", themePreference, ")."] })] })), settingsTab === 'profile' && (_jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsx("div", { style: styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize }), children: "Profile" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Update your display name and optionally set a new password. Password changes require admin rights in the auth service." }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Display name" }), _jsx("input", { value: profileForm.name, onChange: (e) => setProfileForm((prev) => ({ ...prev, name: e.target.value })), placeholder: "Your name", style: styles({
-                                                                padding: `${spacing.sm} ${spacing.md}`,
-                                                                borderRadius: radius.md,
-                                                                border: `1px solid ${colors.border.default}`,
-                                                                backgroundColor: colors.bg.page,
-                                                                color: colors.text.primary,
-                                                                fontSize: ts.body.fontSize,
-                                                            }) })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "New password" }), _jsx("input", { type: "password", value: profileForm.password, onChange: (e) => setProfileForm((prev) => ({ ...prev, password: e.target.value })), placeholder: "Optional", style: styles({
-                                                                padding: `${spacing.sm} ${spacing.md}`,
-                                                                borderRadius: radius.md,
-                                                                border: `1px solid ${colors.border.default}`,
-                                                                backgroundColor: colors.bg.page,
-                                                                color: colors.text.primary,
-                                                                fontSize: ts.body.fontSize,
-                                                            }) })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Confirm password" }), _jsx("input", { type: "password", value: profileForm.confirmPassword, onChange: (e) => setProfileForm((prev) => ({ ...prev, confirmPassword: e.target.value })), placeholder: "Optional", style: styles({
-                                                                padding: `${spacing.sm} ${spacing.md}`,
-                                                                borderRadius: radius.md,
-                                                                border: `1px solid ${colors.border.default}`,
-                                                                backgroundColor: colors.bg.page,
-                                                                color: colors.text.primary,
-                                                                fontSize: ts.body.fontSize,
-                                                            }) })] }), (profileStatus.error || profileStatus.success) && (_jsx("div", { style: styles({
+                                    }), children: [_jsxs("div", { children: [_jsx("div", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight }), children: "Profile" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Update your display name and optionally set a new password." })] }), _jsx("button", { onClick: closeProfileModal, style: {
+                                                ...iconButtonStyle,
+                                                width: '36px',
+                                                height: '36px',
+                                                backgroundColor: colors.bg.muted,
+                                            }, "aria-label": "Close profile settings", children: _jsx(X, { size: 18 }) })] }), _jsxs("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Display name" }), _jsx("input", { value: profileForm.name, onChange: (e) => setProfileForm((prev) => ({ ...prev, name: e.target.value })), placeholder: "Your name", style: styles({
                                                         padding: `${spacing.sm} ${spacing.md}`,
                                                         borderRadius: radius.md,
-                                                        backgroundColor: colors.bg.muted,
-                                                        color: profileStatus.error ? colors.error.default : colors.success.default,
-                                                        border: `1px solid ${profileStatus.error ? colors.error.default : colors.success.default}`,
-                                                    }), children: profileStatus.error || profileStatus.success })), _jsxs("div", { style: styles({ display: 'flex', justifyContent: 'flex-end', gap: spacing.sm }), children: [_jsx("button", { onClick: closeSettings, style: styles({
-                                                                padding: `${spacing.sm} ${spacing.md}`,
-                                                                borderRadius: radius.md,
-                                                                border: `1px solid ${colors.border.default}`,
-                                                                backgroundColor: colors.bg.page,
-                                                                color: colors.text.primary,
-                                                                cursor: 'pointer',
-                                                            }), children: "Cancel" }), _jsx("button", { onClick: handleProfileSave, disabled: profileStatus.saving, style: styles({
-                                                                padding: `${spacing.sm} ${spacing.lg}`,
-                                                                borderRadius: radius.md,
-                                                                border: 'none',
-                                                                backgroundColor: colors.primary.default,
-                                                                color: colors.text.inverse,
-                                                                fontWeight: ts.label.fontWeight,
-                                                                cursor: profileStatus.saving ? 'wait' : 'pointer',
-                                                                opacity: profileStatus.saving ? 0.8 : 1,
-                                                            }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] }))] })] }) })] }))] }));
+                                                        border: `1px solid ${colors.border.default}`,
+                                                        backgroundColor: colors.bg.page,
+                                                        color: colors.text.primary,
+                                                        fontSize: ts.body.fontSize,
+                                                    }) })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "New password" }), _jsx("input", { type: "password", value: profileForm.password, onChange: (e) => setProfileForm((prev) => ({ ...prev, password: e.target.value })), placeholder: "Optional", style: styles({
+                                                        padding: `${spacing.sm} ${spacing.md}`,
+                                                        borderRadius: radius.md,
+                                                        border: `1px solid ${colors.border.default}`,
+                                                        backgroundColor: colors.bg.page,
+                                                        color: colors.text.primary,
+                                                        fontSize: ts.body.fontSize,
+                                                    }) })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Confirm password" }), _jsx("input", { type: "password", value: profileForm.confirmPassword, onChange: (e) => setProfileForm((prev) => ({ ...prev, confirmPassword: e.target.value })), placeholder: "Optional", style: styles({
+                                                        padding: `${spacing.sm} ${spacing.md}`,
+                                                        borderRadius: radius.md,
+                                                        border: `1px solid ${colors.border.default}`,
+                                                        backgroundColor: colors.bg.page,
+                                                        color: colors.text.primary,
+                                                        fontSize: ts.body.fontSize,
+                                                    }) })] }), (profileStatus.error || profileStatus.success) && (_jsx("div", { style: styles({
+                                                padding: `${spacing.sm} ${spacing.md}`,
+                                                borderRadius: radius.md,
+                                                backgroundColor: colors.bg.muted,
+                                                color: profileStatus.error ? colors.error.default : colors.success.default,
+                                                border: `1px solid ${profileStatus.error ? colors.error.default : colors.success.default}`,
+                                            }), children: profileStatus.error || profileStatus.success })), _jsxs("div", { style: styles({ display: 'flex', justifyContent: 'flex-end', gap: spacing.sm }), children: [_jsx("button", { onClick: closeProfileModal, style: styles({
+                                                        padding: `${spacing.sm} ${spacing.md}`,
+                                                        borderRadius: radius.md,
+                                                        border: `1px solid ${colors.border.default}`,
+                                                        backgroundColor: colors.bg.page,
+                                                        color: colors.text.primary,
+                                                        cursor: 'pointer',
+                                                    }), children: "Cancel" }), _jsx("button", { onClick: handleProfileSave, disabled: profileStatus.saving, style: styles({
+                                                        padding: `${spacing.sm} ${spacing.lg}`,
+                                                        borderRadius: radius.md,
+                                                        border: 'none',
+                                                        backgroundColor: colors.primary.default,
+                                                        color: colors.text.inverse,
+                                                        fontWeight: ts.label.fontWeight,
+                                                        cursor: profileStatus.saving ? 'wait' : 'pointer',
+                                                        opacity: profileStatus.saving ? 0.8 : 1,
+                                                    }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] })] }) })] }))] }));
 }
 export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], }) {
     const config = {

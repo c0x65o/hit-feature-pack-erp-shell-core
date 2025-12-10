@@ -334,8 +334,8 @@ function ShellContent({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'appearance' | 'profile'>('appearance');
+  const [showAppearanceModal, setShowAppearanceModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [notifications] = useState<Notification[]>(initialNotifications);
   const [hitConfig, setHitConfig] = useState<any | null>(null);
   const [currentUser, setCurrentUser] = useState<ShellUser | null>(user);
@@ -454,15 +454,26 @@ function ShellContent({
     });
   }, []);
 
-  const openSettings = useCallback((tab: 'appearance' | 'profile') => {
-    setSettingsTab(tab);
-    setShowSettingsModal(true);
+  const openAppearance = useCallback(() => {
+    setShowAppearanceModal(true);
+    setShowProfileModal(false);
     setShowProfileMenu(false);
     setShowNotifications(false);
   }, []);
 
-  const closeSettings = useCallback(() => {
-    setShowSettingsModal(false);
+  const closeAppearance = useCallback(() => {
+    setShowAppearanceModal(false);
+  }, []);
+
+  const openProfileModal = useCallback(() => {
+    setShowProfileModal(true);
+    setShowAppearanceModal(false);
+    setShowProfileMenu(false);
+    setShowNotifications(false);
+  }, []);
+
+  const closeProfileModal = useCallback(() => {
+    setShowProfileModal(false);
     setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
   }, []);
 
@@ -556,10 +567,10 @@ function ShellContent({
   ]);
 
   useEffect(() => {
-    if (showSettingsModal && settingsTab === 'profile' && !profileLoaded && !profileStatus.saving) {
+    if (showProfileModal && !profileLoaded && !profileStatus.saving) {
       fetchProfile();
     }
-  }, [fetchProfile, profileLoaded, profileStatus.saving, settingsTab, showSettingsModal]);
+  }, [fetchProfile, profileLoaded, profileStatus.saving, showProfileModal]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -583,11 +594,6 @@ function ShellContent({
     cursor: 'pointer',
     transition: 'all 150ms ease',
   };
-
-  const settingsTabs: { key: 'appearance' | 'profile'; label: string }[] = [
-    { key: 'appearance', label: 'Appearance' },
-    { key: 'profile', label: 'Profile' },
-  ];
 
   const showSidebar = menuOpen;
 
@@ -727,7 +733,7 @@ function ShellContent({
             <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm })}>
               {config.showThemeToggle && (
                 <button
-                  onClick={() => openSettings('appearance')}
+                  onClick={openAppearance}
                   style={iconButtonStyle}
                   aria-label="Theme settings"
                 >
@@ -826,7 +832,7 @@ function ShellContent({
                         </div>
                         <div style={styles({ padding: spacing.sm })}>
                           <button
-                            onClick={() => openSettings('profile')}
+                            onClick={openProfileModal}
                             style={styles({
                               display: 'flex',
                               alignItems: 'center',
@@ -846,7 +852,7 @@ function ShellContent({
                             Profile
                           </button>
                           <button
-                            onClick={() => openSettings('appearance')}
+                            onClick={openAppearance}
                             style={styles({
                               display: 'flex',
                               alignItems: 'center',
@@ -913,10 +919,10 @@ function ShellContent({
         </div>
       </div>
 
-      {showSettingsModal && (
+      {showAppearanceModal && (
         <>
           <div
-            onClick={closeSettings}
+            onClick={closeAppearance}
             style={styles({
               position: 'fixed',
               inset: 0,
@@ -956,58 +962,27 @@ function ShellContent({
                 })}
               >
                 <div>
-                  <div style={styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight })}>User Settings</div>
+                  <div style={styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight })}>Appearance</div>
                   <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                    Manage your appearance and account details. Changes stay on this device unless saved.
+                    Switch between light, dark, or system. We save your choice in a cookie and localStorage.
                   </div>
                 </div>
                 <button
-                  onClick={closeSettings}
+                  onClick={closeAppearance}
                   style={{
                     ...iconButtonStyle,
                     width: '36px',
                     height: '36px',
                     backgroundColor: colors.bg.muted,
                   }}
-                  aria-label="Close settings"
+                  aria-label="Close appearance settings"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <div
-                style={styles({
-                  display: 'flex',
-                  gap: spacing.sm,
-                  padding: `${spacing.sm} ${spacing.xl}`,
-                  borderBottom: `1px solid ${colors.border.subtle}`,
-                })}
-              >
-                {settingsTabs.map((tab) => {
-                  const active = settingsTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      onClick={() => setSettingsTab(tab.key)}
-                      style={styles({
-                        padding: `${spacing.sm} ${spacing.md}`,
-                        borderRadius: radius.lg,
-                        border: 'none',
-                        backgroundColor: active ? colors.bg.muted : 'transparent',
-                        color: active ? colors.text.primary : colors.text.secondary,
-                        fontWeight: active ? ts.label.fontWeight : ts.body.fontWeight,
-                        cursor: 'pointer',
-                      })}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
               <div style={styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.xl })}>
-                {settingsTab === 'appearance' && (
-                  <div style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.md })}>
+                <div style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.md })}>
                     <div style={styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize })}>Theme</div>
                     <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
                       Switch between light and dark. We store your choice in a cookie and localStorage so it sticks across visits.
@@ -1063,116 +1038,174 @@ function ShellContent({
                     <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary })}>
                       Using <strong>{resolvedTheme}</strong> theme (preference: {themePreference}).
                     </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {showProfileModal && (
+        <>
+          <div
+            onClick={closeProfileModal}
+            style={styles({
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 90,
+            })}
+          />
+          <div
+            style={styles({
+              position: 'fixed',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: spacing['2xl'],
+              zIndex: 100,
+            })}
+          >
+            <div
+              style={styles({
+                width: 'min(640px, 100%)',
+                backgroundColor: colors.bg.surface,
+                borderRadius: radius.xl,
+                border: `1px solid ${colors.border.default}`,
+                boxShadow: shadows.xl,
+                overflow: 'hidden',
+              })}
+            >
+              <div
+                style={styles({
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: `${spacing.lg} ${spacing.xl}`,
+                  borderBottom: `1px solid ${colors.border.subtle}`,
+                })}
+              >
+                <div>
+                  <div style={styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight })}>Profile</div>
+                  <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                    Update your display name and optionally set a new password.
+                  </div>
+                </div>
+                <button
+                  onClick={closeProfileModal}
+                  style={{
+                    ...iconButtonStyle,
+                    width: '36px',
+                    height: '36px',
+                    backgroundColor: colors.bg.muted,
+                  }}
+                  aria-label="Close profile settings"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md })}>
+                <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
+                  <span style={styles({ color: colors.text.secondary })}>Display name</span>
+                  <input
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="Your name"
+                    style={styles({
+                      padding: `${spacing.sm} ${spacing.md}`,
+                      borderRadius: radius.md,
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: colors.bg.page,
+                      color: colors.text.primary,
+                      fontSize: ts.body.fontSize,
+                    })}
+                  />
+                </label>
+
+                <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
+                  <span style={styles({ color: colors.text.secondary })}>New password</span>
+                  <input
+                    type="password"
+                    value={profileForm.password}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Optional"
+                    style={styles({
+                      padding: `${spacing.sm} ${spacing.md}`,
+                      borderRadius: radius.md,
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: colors.bg.page,
+                      color: colors.text.primary,
+                      fontSize: ts.body.fontSize,
+                    })}
+                  />
+                </label>
+
+                <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
+                  <span style={styles({ color: colors.text.secondary })}>Confirm password</span>
+                  <input
+                    type="password"
+                    value={profileForm.confirmPassword}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Optional"
+                    style={styles({
+                      padding: `${spacing.sm} ${spacing.md}`,
+                      borderRadius: radius.md,
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: colors.bg.page,
+                      color: colors.text.primary,
+                      fontSize: ts.body.fontSize,
+                    })}
+                  />
+                </label>
+
+                {(profileStatus.error || profileStatus.success) && (
+                  <div
+                    style={styles({
+                      padding: `${spacing.sm} ${spacing.md}`,
+                      borderRadius: radius.md,
+                      backgroundColor: colors.bg.muted,
+                      color: profileStatus.error ? colors.error.default : colors.success.default,
+                      border: `1px solid ${profileStatus.error ? colors.error.default : colors.success.default}`,
+                    })}
+                  >
+                    {profileStatus.error || profileStatus.success}
                   </div>
                 )}
 
-                {settingsTab === 'profile' && (
-                  <div style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.md })}>
-                    <div style={styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize })}>Profile</div>
-                    <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                      Update your display name and optionally set a new password. Password changes require admin rights in the auth service.
-                    </div>
-
-                    <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
-                      <span style={styles({ color: colors.text.secondary })}>Display name</span>
-                      <input
-                        value={profileForm.name}
-                        onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-                        placeholder="Your name"
-                        style={styles({
-                          padding: `${spacing.sm} ${spacing.md}`,
-                          borderRadius: radius.md,
-                          border: `1px solid ${colors.border.default}`,
-                          backgroundColor: colors.bg.page,
-                          color: colors.text.primary,
-                          fontSize: ts.body.fontSize,
-                        })}
-                      />
-                    </label>
-
-                    <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
-                      <span style={styles({ color: colors.text.secondary })}>New password</span>
-                      <input
-                        type="password"
-                        value={profileForm.password}
-                        onChange={(e) => setProfileForm((prev) => ({ ...prev, password: e.target.value }))}
-                        placeholder="Optional"
-                        style={styles({
-                          padding: `${spacing.sm} ${spacing.md}`,
-                          borderRadius: radius.md,
-                          border: `1px solid ${colors.border.default}`,
-                          backgroundColor: colors.bg.page,
-                          color: colors.text.primary,
-                          fontSize: ts.body.fontSize,
-                        })}
-                      />
-                    </label>
-
-                    <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
-                      <span style={styles({ color: colors.text.secondary })}>Confirm password</span>
-                      <input
-                        type="password"
-                        value={profileForm.confirmPassword}
-                        onChange={(e) => setProfileForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                        placeholder="Optional"
-                        style={styles({
-                          padding: `${spacing.sm} ${spacing.md}`,
-                          borderRadius: radius.md,
-                          border: `1px solid ${colors.border.default}`,
-                          backgroundColor: colors.bg.page,
-                          color: colors.text.primary,
-                          fontSize: ts.body.fontSize,
-                        })}
-                      />
-                    </label>
-
-                    {(profileStatus.error || profileStatus.success) && (
-                      <div
-                        style={styles({
-                          padding: `${spacing.sm} ${spacing.md}`,
-                          borderRadius: radius.md,
-                          backgroundColor: colors.bg.muted,
-                          color: profileStatus.error ? colors.error.default : colors.success.default,
-                          border: `1px solid ${profileStatus.error ? colors.error.default : colors.success.default}`,
-                        })}
-                      >
-                        {profileStatus.error || profileStatus.success}
-                      </div>
-                    )}
-
-                    <div style={styles({ display: 'flex', justifyContent: 'flex-end', gap: spacing.sm })}>
-                      <button
-                        onClick={closeSettings}
-                        style={styles({
-                          padding: `${spacing.sm} ${spacing.md}`,
-                          borderRadius: radius.md,
-                          border: `1px solid ${colors.border.default}`,
-                          backgroundColor: colors.bg.page,
-                          color: colors.text.primary,
-                          cursor: 'pointer',
-                        })}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleProfileSave}
-                        disabled={profileStatus.saving}
-                        style={styles({
-                          padding: `${spacing.sm} ${spacing.lg}`,
-                          borderRadius: radius.md,
-                          border: 'none',
-                          backgroundColor: colors.primary.default,
-                          color: colors.text.inverse,
-                          fontWeight: ts.label.fontWeight,
-                          cursor: profileStatus.saving ? 'wait' : 'pointer',
-                          opacity: profileStatus.saving ? 0.8 : 1,
-                        })}
-                      >
-                        {profileStatus.saving ? 'Saving…' : 'Save changes'}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <div style={styles({ display: 'flex', justifyContent: 'flex-end', gap: spacing.sm })}>
+                  <button
+                    onClick={closeProfileModal}
+                    style={styles({
+                      padding: `${spacing.sm} ${spacing.md}`,
+                      borderRadius: radius.md,
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: colors.bg.page,
+                      color: colors.text.primary,
+                      cursor: 'pointer',
+                    })}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleProfileSave}
+                    disabled={profileStatus.saving}
+                    style={styles({
+                      padding: `${spacing.sm} ${spacing.lg}`,
+                      borderRadius: radius.md,
+                      border: 'none',
+                      backgroundColor: colors.primary.default,
+                      color: colors.text.inverse,
+                      fontWeight: ts.label.fontWeight,
+                      cursor: profileStatus.saving ? 'wait' : 'pointer',
+                      opacity: profileStatus.saving ? 0.8 : 1,
+                    })}
+                  >
+                    {profileStatus.saving ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
