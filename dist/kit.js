@@ -8,53 +8,81 @@ import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown 
 // Every component follows these rules strictly for visual consistency.
 // SPACING SCALE (in pixels) - use rem equivalents
 // 0: 0, 1: 4px, 2: 8px, 3: 12px, 4: 16px, 5: 20px, 6: 24px, 8: 32px, 10: 40px, 12: 48px
-// COLORS - Dark theme optimized for long work sessions
+// COLORS - Uses CSS variables for theme support
+// These will automatically switch between light and dark based on data-theme attribute
+function getComputedStyleValue(property) {
+    if (typeof window === 'undefined')
+        return '#000000';
+    return getComputedStyle(document.documentElement).getPropertyValue(property).trim() || '#000000';
+}
 const colors = {
-    // Backgrounds (darkest to lightest)
-    bg: {
-        page: '#0a0a0f', // Page background - darkest
-        surface: '#12121a', // Cards, panels - slightly lighter
-        elevated: '#1a1a24', // Elevated elements, hovers
-        input: '#0d0d12', // Input fields - darker than surface
+    // Backgrounds - use CSS variables that respond to theme
+    get bg() {
+        return {
+            page: getComputedStyleValue('--hit-background') || '#ffffff',
+            surface: getComputedStyleValue('--hit-surface') || '#ffffff',
+            elevated: getComputedStyleValue('--hit-surface-hover') || '#f8fafc',
+            input: getComputedStyleValue('--hit-input-bg') || '#ffffff',
+            muted: getComputedStyleValue('--hit-muted') || '#f1f5f9',
+        };
     },
     // Borders
-    border: {
-        subtle: '#1f1f2e', // Subtle separators
-        default: '#2a2a3d', // Default borders
-        focus: '#3b82f6', // Focus rings
+    get border() {
+        return {
+            subtle: getComputedStyleValue('--hit-border') || '#e2e8f0',
+            default: getComputedStyleValue('--hit-border-strong') || '#cbd5e1',
+            focus: getComputedStyleValue('--hit-primary') || '#3b82f6',
+        };
     },
     // Text
-    text: {
-        primary: '#f4f4f5', // Primary text - near white
-        secondary: '#a1a1aa', // Secondary text - muted
-        muted: '#71717a', // Very muted text
-        inverse: '#0a0a0f', // Text on light backgrounds
+    get text() {
+        return {
+            primary: getComputedStyleValue('--hit-foreground') || '#0f172a',
+            secondary: getComputedStyleValue('--hit-muted-foreground') || '#64748b',
+            muted: getComputedStyleValue('--hit-input-placeholder') || '#9ca3af',
+            inverse: '#ffffff', // Always white for inverse text
+        };
     },
-    // Semantic colors
-    primary: {
-        default: '#3b82f6', // Blue - primary actions
-        hover: '#2563eb',
-        muted: 'rgba(59, 130, 246, 0.15)',
+    // Semantic colors - use CSS variables
+    get primary() {
+        return {
+            default: getComputedStyleValue('--hit-primary') || '#3b82f6',
+            hover: getComputedStyleValue('--hit-primary-hover') || '#2563eb',
+            muted: 'rgba(59, 130, 246, 0.15)',
+        };
     },
-    success: {
-        default: '#22c55e',
-        muted: 'rgba(34, 197, 94, 0.15)',
-        border: 'rgba(34, 197, 94, 0.3)',
+    get success() {
+        return {
+            default: getComputedStyleValue('--hit-success') || '#22c55e',
+            muted: 'rgba(34, 197, 94, 0.15)',
+            border: 'rgba(34, 197, 94, 0.3)',
+        };
     },
-    warning: {
-        default: '#f59e0b',
-        muted: 'rgba(245, 158, 11, 0.15)',
-        border: 'rgba(245, 158, 11, 0.3)',
+    get warning() {
+        return {
+            default: getComputedStyleValue('--hit-warning') || '#f59e0b',
+            muted: 'rgba(245, 158, 11, 0.15)',
+            border: 'rgba(245, 158, 11, 0.3)',
+        };
     },
-    error: {
-        default: '#ef4444',
-        muted: 'rgba(239, 68, 68, 0.15)',
-        border: 'rgba(239, 68, 68, 0.3)',
+    get error() {
+        return {
+            default: getComputedStyleValue('--hit-error') || '#ef4444',
+            muted: 'rgba(239, 68, 68, 0.15)',
+            border: 'rgba(239, 68, 68, 0.3)',
+        };
     },
-    info: {
-        default: '#06b6d4',
-        muted: 'rgba(6, 182, 212, 0.15)',
-        border: 'rgba(6, 182, 212, 0.3)',
+    get info() {
+        return {
+            default: getComputedStyleValue('--hit-info') || '#06b6d4',
+            muted: 'rgba(6, 182, 212, 0.15)',
+            border: 'rgba(6, 182, 212, 0.3)',
+        };
+    },
+    get accent() {
+        return {
+            default: getComputedStyleValue('--hit-accent') || '#8b5cf6',
+        };
     },
 };
 // SIZING
