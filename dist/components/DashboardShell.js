@@ -44,65 +44,12 @@ function groupNavItems(items) {
     });
 }
 // =============================================================================
-// FEATURE FLAG HELPERS
+// NAV FILTERING HELPERS
 // =============================================================================
-function isFlagEnabled(flag, cfg, authFeatures) {
-    if (!flag)
-        return true;
-    if (authFeatures) {
-        const authLookup = {
-            'auth.allowSignup': 'allow_signup',
-            'auth.allow_signup': 'allow_signup',
-            'auth.emailVerification': 'email_verification',
-            'auth.email_verification': 'email_verification',
-            'auth.passwordLogin': 'password_login',
-            'auth.password_login': 'password_login',
-            'auth.passwordReset': 'password_reset',
-            'auth.password_reset': 'password_reset',
-            'auth.magicLinkLogin': 'magic_link_login',
-            'auth.magic_link_login': 'magic_link_login',
-            'auth.twoFactorAuth': 'two_factor_auth',
-            'auth.two_factor_auth': 'two_factor_auth',
-            'auth.auditLog': 'audit_log',
-            'auth.audit_log': 'audit_log',
-            'auth.allowInvited': 'allow_invited',
-            'auth.allow_invited': 'allow_invited',
-        };
-        const authKey = authLookup[flag];
-        if (authKey && authFeatures[authKey] !== undefined) {
-            return authFeatures[authKey] !== false;
-        }
-    }
-    const auth = cfg?.auth || {};
-    const admin = cfg?.admin || {};
-    const lookup = {
-        'auth.allowSignup': auth.allowSignup,
-        'auth.emailVerification': auth.emailVerification,
-        'auth.passwordLogin': auth.passwordLogin,
-        'auth.passwordReset': auth.passwordReset,
-        'auth.magicLinkLogin': auth.magicLinkLogin,
-        'auth.twoFactorAuth': auth.twoFactorAuth,
-        'auth.auditLog': auth.auditLog,
-        'auth.show2faSetup': auth.show2faSetup,
-        'auth.showSocialLogin': auth.showSocialLogin,
-        'admin.showDashboard': admin.showDashboard,
-        'admin.showUsers': admin.showUsers,
-        'admin.showSessions': admin.showSessions,
-        'admin.showAuditLog': admin.showAuditLog,
-        'admin.showInvites': admin.showInvites,
-        'admin.showPermissions': admin.showPermissions,
-        'admin.showSettings': admin.showSettings,
-    };
-    const value = lookup[flag];
-    return value !== undefined ? value : true;
-}
-function filterNavByFlags(items, cfg, authFeatures, userRoles) {
+function filterNavByRoles(items, userRoles) {
+    // Feature flags are now filtered at generation time, so we only need to filter by roles
     return items
         .filter((item) => {
-        // Check feature flag
-        if (!isFlagEnabled(item.featureFlag, cfg, authFeatures)) {
-            return false;
-        }
         // Check role-based access
         if (item.roles && item.roles.length > 0) {
             // If item requires specific roles, user must have at least one
@@ -120,7 +67,7 @@ function filterNavByFlags(items, cfg, authFeatures, userRoles) {
         if (!item.children) {
             return item;
         }
-        const children = filterNavByFlags(item.children, cfg, authFeatures, userRoles);
+        const children = filterNavByRoles(item.children, userRoles);
         return {
             ...item,
             children: children.length > 0 ? children : undefined,
@@ -336,7 +283,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                 overflowY: 'auto',
                                 padding: `${spacing.sm} ${spacing.md}`,
                                 minWidth: '280px',
-                            }), children: groupNavItems(filterNavByFlags(navItems, hitConfig, authConfig, user?.roles)).map((group) => (_jsxs("div", { children: [_jsx(NavGroupHeader, { label: group.label }), group.items.map((item) => (_jsx(NavItemComponent, { item: item, activePath: activePath, onNavigate: onNavigate }, item.id)))] }, group.group))) }), _jsx("div", { style: styles({
+                            }), children: groupNavItems(filterNavByRoles(navItems, user?.roles)).map((group) => (_jsxs("div", { children: [_jsx(NavGroupHeader, { label: group.label }), group.items.map((item) => (_jsx(NavItemComponent, { item: item, activePath: activePath, onNavigate: onNavigate }, item.id)))] }, group.group))) }), _jsx("div", { style: styles({
                                 padding: spacing.lg,
                                 borderTop: `1px solid ${colors.border.subtle}`,
                                 flexShrink: 0,
