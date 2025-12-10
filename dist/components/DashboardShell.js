@@ -65,6 +65,8 @@ function isFlagEnabled(flag, cfg, authFeatures) {
             'auth.two_factor_auth': 'two_factor_auth',
             'auth.auditLog': 'audit_log',
             'auth.audit_log': 'audit_log',
+            'auth.allowInvited': 'allow_invited',
+            'auth.allow_invited': 'allow_invited',
         };
         const authKey = authLookup[flag];
         if (authKey && authFeatures[authKey] !== undefined) {
