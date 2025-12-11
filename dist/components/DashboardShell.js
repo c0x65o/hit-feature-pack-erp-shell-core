@@ -213,7 +213,14 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const [showAppearanceModal, setShowAppearanceModal] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [notifications] = useState(initialNotifications);
-    const [hitConfig, setHitConfig] = useState(null);
+    // Read config synchronously from window global (set by HitAppProvider)
+    // Config is STATIC - generated at build time from hit.yaml
+    const [hitConfig] = useState(() => {
+        if (typeof window === 'undefined')
+            return null;
+        const win = window;
+        return win.__HIT_CONFIG || null;
+    });
     const [currentUser, setCurrentUser] = useState(user);
     // Initialize theme from DOM (set by blocking script) to prevent flash
     const [themePreference, setThemePreference] = useState(() => {
@@ -292,12 +299,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         setProfileMetadata({});
         setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
     }, [user]);
-    useEffect(() => {
-        fetch('/hit-config.json')
-            .then((res) => res.json())
-            .then((data) => setHitConfig(data))
-            .catch(() => setHitConfig(null));
-    }, []);
+    // Note: hitConfig is now read synchronously from window.__HIT_CONFIG
+    // No fetch needed - config is static and injected by HitAppProvider
     // Load persisted state from localStorage on mount
     useEffect(() => {
         if (!themeLoaded) {
