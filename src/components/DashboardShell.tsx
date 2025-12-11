@@ -809,17 +809,30 @@ function ShellContent({
                       cursor: 'pointer',
                     })}
                   >
-                    <div style={styles({
-                      width: '36px',
-                      height: '36px',
-                      background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
-                      borderRadius: radius.full,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    })}>
-                      <User size={18} style={{ color: colors.text.inverse }} />
-                    </div>
+                    {currentUser?.avatar ? (
+                      <img
+                        src={currentUser.avatar}
+                        alt={currentUser?.name || currentUser?.email || 'User'}
+                        style={styles({
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: radius.full,
+                          objectFit: 'cover',
+                        })}
+                      />
+                    ) : (
+                      <div style={styles({
+                        width: '36px',
+                        height: '36px',
+                        background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                        borderRadius: radius.full,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      })}>
+                        <User size={18} style={{ color: colors.text.inverse }} />
+                      </div>
+                    )}
                     <div style={styles({ textAlign: 'left' })}>
                       <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
                         {currentUser?.name || currentUser?.email || 'User'}
@@ -846,12 +859,44 @@ function ShellContent({
                         zIndex: 50,
                         overflow: 'hidden',
                       })}>
-                        <div style={styles({ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${colors.border.subtle}` })}>
-                          <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
-                            {currentUser?.name || 'User'}
-                          </div>
-                          <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                            {currentUser?.email || ''}
+                        <div style={styles({ 
+                          padding: `${spacing.md} ${spacing.lg}`, 
+                          borderBottom: `1px solid ${colors.border.subtle}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: spacing.sm,
+                        })}>
+                          {currentUser?.avatar ? (
+                            <img
+                              src={currentUser.avatar}
+                              alt={currentUser?.name || currentUser?.email || 'User'}
+                              style={styles({
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: radius.full,
+                                objectFit: 'cover',
+                              })}
+                            />
+                          ) : (
+                            <div style={styles({
+                              width: '40px',
+                              height: '40px',
+                              background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                              borderRadius: radius.full,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            })}>
+                              <User size={20} style={{ color: colors.text.inverse }} />
+                            </div>
+                          )}
+                          <div style={styles({ flex: 1, minWidth: 0 })}>
+                            <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
+                              {currentUser?.name || 'User'}
+                            </div>
+                            <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                              {currentUser?.email || ''}
+                            </div>
                           </div>
                         </div>
                         <div style={styles({ padding: spacing.sm })}>

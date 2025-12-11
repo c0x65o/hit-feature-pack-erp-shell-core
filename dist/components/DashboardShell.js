@@ -570,7 +570,12 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                             border: 'none',
                                                             borderRadius: radius.lg,
                                                             cursor: 'pointer',
-                                                        }), children: [_jsx("div", { style: styles({
+                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.name || currentUser?.email || 'User', style: styles({
+                                                                    width: '36px',
+                                                                    height: '36px',
+                                                                    borderRadius: radius.full,
+                                                                    objectFit: 'cover',
+                                                                }) })) : (_jsx("div", { style: styles({
                                                                     width: '36px',
                                                                     height: '36px',
                                                                     background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
@@ -578,7 +583,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                }), children: _jsx(User, { size: 18, style: { color: colors.text.inverse } }) }), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
+                                                                }), children: _jsx(User, { size: 18, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
                                                                     position: 'absolute',
                                                                     right: 0,
                                                                     top: '100%',
@@ -590,7 +595,26 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     boxShadow: shadows.xl,
                                                                     zIndex: 50,
                                                                     overflow: 'hidden',
-                                                                }), children: [_jsxs("div", { style: styles({ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${colors.border.subtle}` }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || '' })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
+                                                                }), children: [_jsxs("div", { style: styles({
+                                                                            padding: `${spacing.md} ${spacing.lg}`,
+                                                                            borderBottom: `1px solid ${colors.border.subtle}`,
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: spacing.sm,
+                                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.name || currentUser?.email || 'User', style: styles({
+                                                                                    width: '40px',
+                                                                                    height: '40px',
+                                                                                    borderRadius: radius.full,
+                                                                                    objectFit: 'cover',
+                                                                                }) })) : (_jsx("div", { style: styles({
+                                                                                    width: '40px',
+                                                                                    height: '40px',
+                                                                                    background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                                                                                    borderRadius: radius.full,
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                }), children: _jsx(User, { size: 20, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || '' })] })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,
