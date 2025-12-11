@@ -366,7 +366,6 @@ function ShellContent({
     return typeof document !== 'undefined';
   });
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || '',
     password: '',
     confirmPassword: '',
   });
@@ -429,7 +428,7 @@ function ShellContent({
 
   useEffect(() => {
     setCurrentUser(user || null);
-    setProfileForm((prev) => ({ ...prev, name: user?.name || prev.name || '' }));
+    // Note: name is no longer stored - email is used as the identifier
     setProfileLoaded(false);
     setProfileMetadata({});
     setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
@@ -526,7 +525,6 @@ function ShellContent({
       }
       setProfileMetadata(data.metadata || {});
       setProfileFields(data.profile_fields || {});
-      setProfileForm((prev) => ({ ...prev, name: data.metadata?.name ?? prev.name ?? '' }));
       
       // Fetch profile field metadata (including email)
       try {
@@ -570,20 +568,36 @@ function ShellContent({
       }
 
       const payload: Record<string, any> = {};
-      const nextMetadata = { ...profileMetadata };
-      if (profileForm.name) {
-        nextMetadata.name = profileForm.name;
-      }
-      if (Object.keys(nextMetadata).length > 0) {
-        payload.metadata = nextMetadata;
+      // Note: metadata.name is no longer used - email is used as the identifier
+      if (Object.keys(profileMetadata).length > 0) {
+        payload.metadata = profileMetadata;
       }
       if (profileForm.password) {
         payload.password = profileForm.password;
       }
       
-      // Include profile_fields if they exist
-      if (Object.keys(profileFields).length > 0) {
-        payload.profile_fields = profileFields;
+      // Build profile_fields payload - include all required fields and any modified fields
+      const nextProfileFields: Record<string, any> = { ...profileFields };
+      
+      // Ensure all required fields are included (even if disabled/uneditable)
+      // This prevents backend validation errors for required fields like email
+      for (const fieldMeta of profileFieldMetadata) {
+        if (fieldMeta.required && !(fieldMeta.field_key in nextProfileFields)) {
+          // For email, get it from currentUser
+          if (fieldMeta.field_key === 'email' && currentUser?.email) {
+            nextProfileFields[fieldMeta.field_key] = currentUser.email;
+          }
+          // For other required fields, check if they exist in the fetched profile_fields
+          // (they should have been loaded in fetchProfile, but include them to be safe)
+          else if (profileFields[fieldMeta.field_key] !== undefined) {
+            nextProfileFields[fieldMeta.field_key] = profileFields[fieldMeta.field_key];
+          }
+        }
+      }
+      
+      // Include profile_fields if there are any fields to send
+      if (Object.keys(nextProfileFields).length > 0) {
+        payload.profile_fields = nextProfileFields;
       }
 
       const response = await fetch(`/api/proxy/auth/me`, {
@@ -599,9 +613,9 @@ function ShellContent({
         throw new Error(data?.detail || data?.error || 'Failed to update profile');
       }
 
-      setProfileMetadata(data.metadata || nextMetadata);
+      setProfileMetadata(data.metadata || profileMetadata);
       setProfileFields(data.profile_fields || profileFields);
-      setCurrentUser((prev) => (prev ? { ...prev, name: profileForm.name || prev.name } : prev));
+      // Note: email is used as the identifier, not a separate name field
       setProfileStatus({ saving: false, error: null, success: 'Profile updated successfully.' });
       setProfileForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
       setProfileLoaded(true);
@@ -615,10 +629,10 @@ function ShellContent({
   }, [
     currentUser?.email,
     profileForm.confirmPassword,
-    profileForm.name,
     profileForm.password,
     profileMetadata,
     profileFields,
+    profileFieldMetadata,
   ]);
 
   useEffect(() => {
@@ -846,7 +860,7 @@ function ShellContent({
                     {currentUser?.avatar ? (
                       <img
                         src={currentUser.avatar}
-                        alt={currentUser?.name || currentUser?.email || 'User'}
+                        alt={currentUser?.email || 'User'}
                         style={styles({
                           width: '36px',
                           height: '36px',
@@ -869,7 +883,7 @@ function ShellContent({
                     )}
                     <div style={styles({ textAlign: 'left' })}>
                       <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
-                        {currentUser?.name || currentUser?.email || 'User'}
+                        {currentUser?.email || 'User'}
                       </div>
                       <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
                         {currentUser?.roles?.[0] || 'Member'}
@@ -903,7 +917,7 @@ function ShellContent({
                           {currentUser?.avatar ? (
                             <img
                               src={currentUser.avatar}
-                              alt={currentUser?.name || currentUser?.email || 'User'}
+                              alt={currentUser?.email || 'User'}
                               style={styles({
                                 width: '40px',
                                 height: '40px',
@@ -926,7 +940,7 @@ function ShellContent({
                           )}
                           <div style={styles({ flex: 1, minWidth: 0 })}>
                             <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
-                              {currentUser?.name || 'User'}
+                              {currentUser?.email || 'User'}
                             </div>
                             <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
                               {currentUser?.email || ''}
@@ -1193,7 +1207,7 @@ function ShellContent({
                 <div>
                   <div style={styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight })}>Profile</div>
                   <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                    Update your display name and optionally set a new password.
+                    Update your profile fields and optionally set a new password.
                   </div>
                 </div>
                 <button
@@ -1271,24 +1285,6 @@ function ShellContent({
                       </label>
                     );
                   })}
-
-                {/* Display Name (metadata) - shown after profile fields */}
-                <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
-                  <span style={styles({ color: colors.text.secondary })}>Display name</span>
-                  <input
-                    value={profileForm.name}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="Your name"
-                    style={styles({
-                      padding: `${spacing.sm} ${spacing.md}`,
-                      borderRadius: radius.md,
-                      border: `1px solid ${colors.border.default}`,
-                      backgroundColor: colors.bg.page,
-                      color: colors.text.primary,
-                      fontSize: ts.body.fontSize,
-                    })}
-                  />
-                </label>
 
                 {/* Password fields */}
                 <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>

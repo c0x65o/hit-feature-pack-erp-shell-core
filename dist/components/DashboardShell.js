@@ -244,7 +244,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         return typeof document !== 'undefined';
     });
     const [profileForm, setProfileForm] = useState({
-        name: user?.name || '',
         password: '',
         confirmPassword: '',
     });
@@ -296,7 +295,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     }, [themePreference, applyThemePreference]);
     useEffect(() => {
         setCurrentUser(user || null);
-        setProfileForm((prev) => ({ ...prev, name: user?.name || prev.name || '' }));
+        // Note: name is no longer stored - email is used as the identifier
         setProfileLoaded(false);
         setProfileMetadata({});
         setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
@@ -387,7 +386,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             }
             setProfileMetadata(data.metadata || {});
             setProfileFields(data.profile_fields || {});
-            setProfileForm((prev) => ({ ...prev, name: data.metadata?.name ?? prev.name ?? '' }));
             // Fetch profile field metadata (including email)
             try {
                 const fieldsResponse = await fetch(`/api/proxy/auth/me/profile-fields`, {
@@ -428,19 +426,33 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 throw new Error('You must be signed in to update your profile.');
             }
             const payload = {};
-            const nextMetadata = { ...profileMetadata };
-            if (profileForm.name) {
-                nextMetadata.name = profileForm.name;
-            }
-            if (Object.keys(nextMetadata).length > 0) {
-                payload.metadata = nextMetadata;
+            // Note: metadata.name is no longer used - email is used as the identifier
+            if (Object.keys(profileMetadata).length > 0) {
+                payload.metadata = profileMetadata;
             }
             if (profileForm.password) {
                 payload.password = profileForm.password;
             }
-            // Include profile_fields if they exist
-            if (Object.keys(profileFields).length > 0) {
-                payload.profile_fields = profileFields;
+            // Build profile_fields payload - include all required fields and any modified fields
+            const nextProfileFields = { ...profileFields };
+            // Ensure all required fields are included (even if disabled/uneditable)
+            // This prevents backend validation errors for required fields like email
+            for (const fieldMeta of profileFieldMetadata) {
+                if (fieldMeta.required && !(fieldMeta.field_key in nextProfileFields)) {
+                    // For email, get it from currentUser
+                    if (fieldMeta.field_key === 'email' && currentUser?.email) {
+                        nextProfileFields[fieldMeta.field_key] = currentUser.email;
+                    }
+                    // For other required fields, check if they exist in the fetched profile_fields
+                    // (they should have been loaded in fetchProfile, but include them to be safe)
+                    else if (profileFields[fieldMeta.field_key] !== undefined) {
+                        nextProfileFields[fieldMeta.field_key] = profileFields[fieldMeta.field_key];
+                    }
+                }
+            }
+            // Include profile_fields if there are any fields to send
+            if (Object.keys(nextProfileFields).length > 0) {
+                payload.profile_fields = nextProfileFields;
             }
             const response = await fetch(`/api/proxy/auth/me`, {
                 method: 'PUT',
@@ -454,9 +466,9 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (!response.ok) {
                 throw new Error(data?.detail || data?.error || 'Failed to update profile');
             }
-            setProfileMetadata(data.metadata || nextMetadata);
+            setProfileMetadata(data.metadata || profileMetadata);
             setProfileFields(data.profile_fields || profileFields);
-            setCurrentUser((prev) => (prev ? { ...prev, name: profileForm.name || prev.name } : prev));
+            // Note: email is used as the identifier, not a separate name field
             setProfileStatus({ saving: false, error: null, success: 'Profile updated successfully.' });
             setProfileForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
             setProfileLoaded(true);
@@ -471,10 +483,10 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     }, [
         currentUser?.email,
         profileForm.confirmPassword,
-        profileForm.name,
         profileForm.password,
         profileMetadata,
         profileFields,
+        profileFieldMetadata,
     ]);
     useEffect(() => {
         if (showProfileModal && !profileLoaded && !profileStatus.saving) {
@@ -594,7 +606,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                             border: 'none',
                                                             borderRadius: radius.lg,
                                                             cursor: 'pointer',
-                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.name || currentUser?.email || 'User', style: styles({
+                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.email || 'User', style: styles({
                                                                     width: '36px',
                                                                     height: '36px',
                                                                     borderRadius: radius.full,
@@ -607,7 +619,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                }), children: _jsx(User, { size: 18, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
+                                                                }), children: _jsx(User, { size: 18, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
                                                                     position: 'absolute',
                                                                     right: 0,
                                                                     top: '100%',
@@ -625,7 +637,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                             display: 'flex',
                                                                             alignItems: 'center',
                                                                             gap: spacing.sm,
-                                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.name || currentUser?.email || 'User', style: styles({
+                                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.email || 'User', style: styles({
                                                                                     width: '40px',
                                                                                     height: '40px',
                                                                                     borderRadius: radius.full,
@@ -638,7 +650,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     justifyContent: 'center',
-                                                                                }), children: _jsx(User, { size: 20, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.name || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || '' })] })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
+                                                                                }), children: _jsx(User, { size: 20, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || '' })] })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,
@@ -768,7 +780,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                         justifyContent: 'space-between',
                                         padding: `${spacing.lg} ${spacing.xl}`,
                                         borderBottom: `1px solid ${colors.border.subtle}`,
-                                    }), children: [_jsxs("div", { children: [_jsx("div", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight }), children: "Profile" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Update your display name and optionally set a new password." })] }), _jsx("button", { onClick: closeProfileModal, style: {
+                                    }), children: [_jsxs("div", { children: [_jsx("div", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight }), children: "Profile" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "Update your profile fields and optionally set a new password." })] }), _jsx("button", { onClick: closeProfileModal, style: {
                                                 ...iconButtonStyle,
                                                 width: '36px',
                                                 height: '36px',
@@ -806,14 +818,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         }) }), (!canEdit || fieldMeta.field_key === 'email') && (_jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: fieldMeta.field_key === 'email'
                                                             ? 'Email cannot be changed'
                                                             : 'This field can only be edited by administrators' }))] }, fieldMeta.field_key));
-                                        }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Display name" }), _jsx("input", { value: profileForm.name, onChange: (e) => setProfileForm((prev) => ({ ...prev, name: e.target.value })), placeholder: "Your name", style: styles({
-                                                        padding: `${spacing.sm} ${spacing.md}`,
-                                                        borderRadius: radius.md,
-                                                        border: `1px solid ${colors.border.default}`,
-                                                        backgroundColor: colors.bg.page,
-                                                        color: colors.text.primary,
-                                                        fontSize: ts.body.fontSize,
-                                                    }) })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "New password" }), _jsx("input", { type: "password", value: profileForm.password, onChange: (e) => setProfileForm((prev) => ({ ...prev, password: e.target.value })), placeholder: "Optional", style: styles({
+                                        }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "New password" }), _jsx("input", { type: "password", value: profileForm.password, onChange: (e) => setProfileForm((prev) => ({ ...prev, password: e.target.value })), placeholder: "Optional", style: styles({
                                                         padding: `${spacing.sm} ${spacing.md}`,
                                                         borderRadius: radius.md,
                                                         border: `1px solid ${colors.border.default}`,

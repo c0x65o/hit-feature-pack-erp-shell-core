@@ -40,7 +40,6 @@ export interface ShellConfig {
 export interface ShellUser {
     id?: string;
     email?: string;
-    name?: string;
     avatar?: string;
     roles?: string[];
 }
