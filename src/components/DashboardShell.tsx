@@ -943,7 +943,7 @@ function ShellContent({
                               {currentUser?.email || 'User'}
                             </div>
                             <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                              {currentUser?.email || ''}
+                              {currentUser?.roles?.[0] || 'Member'}
                             </div>
                           </div>
                         </div>
