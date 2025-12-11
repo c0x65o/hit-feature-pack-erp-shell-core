@@ -249,6 +249,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         confirmPassword: '',
     });
     const [profileMetadata, setProfileMetadata] = useState({});
+    const [profileFields, setProfileFields] = useState({});
+    const [profileFieldMetadata, setProfileFieldMetadata] = useState([]);
     const [profileStatus, setProfileStatus] = useState({
         saving: false,
         error: null,
@@ -375,7 +377,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (!token) {
                 throw new Error('You must be signed in to update your profile.');
             }
-            const response = await fetch(`/api/proxy/auth/users/${encodeURIComponent(currentUser.email)}`, {
+            // Fetch user profile data using /me endpoint
+            const response = await fetch(`/api/proxy/auth/me`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json().catch(() => ({}));
@@ -383,7 +386,22 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 throw new Error(data?.detail || data?.error || 'Unable to load profile');
             }
             setProfileMetadata(data.metadata || {});
+            setProfileFields(data.profile_fields || {});
             setProfileForm((prev) => ({ ...prev, name: data.metadata?.name ?? prev.name ?? '' }));
+            // Fetch profile field metadata
+            try {
+                const fieldsResponse = await fetch(`/api/proxy/auth/profile-fields`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (fieldsResponse.ok) {
+                    const fieldsData = await fieldsResponse.json().catch(() => []);
+                    setProfileFieldMetadata(fieldsData || []);
+                }
+            }
+            catch (fieldsError) {
+                // Silently fail if profile fields feature is not enabled
+                console.debug('Profile fields not available:', fieldsError);
+            }
             setProfileLoaded(true);
         }
         catch (error) {
@@ -420,7 +438,11 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (profileForm.password) {
                 payload.password = profileForm.password;
             }
-            const response = await fetch(`/api/proxy/auth/users/${encodeURIComponent(currentUser.email)}`, {
+            // Include profile_fields if they exist
+            if (Object.keys(profileFields).length > 0) {
+                payload.profile_fields = profileFields;
+            }
+            const response = await fetch(`/api/proxy/auth/me`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -433,6 +455,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 throw new Error(data?.detail || data?.error || 'Failed to update profile');
             }
             setProfileMetadata(data.metadata || nextMetadata);
+            setProfileFields(data.profile_fields || profileFields);
             setCurrentUser((prev) => (prev ? { ...prev, name: profileForm.name || prev.name } : prev));
             setProfileStatus({ saving: false, error: null, success: 'Profile updated successfully.' });
             setProfileForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
@@ -451,6 +474,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         profileForm.name,
         profileForm.password,
         profileMetadata,
+        profileFields,
     ]);
     useEffect(() => {
         if (showProfileModal && !profileLoaded && !profileStatus.saving) {
@@ -770,7 +794,31 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         backgroundColor: colors.bg.page,
                                                         color: colors.text.primary,
                                                         fontSize: ts.body.fontSize,
-                                                    }) })] }), (profileStatus.error || profileStatus.success) && (_jsx("div", { style: styles({
+                                                    }) })] }), profileFieldMetadata
+                                            .sort((a, b) => a.display_order - b.display_order)
+                                            .map((fieldMeta) => {
+                                            const isAdmin = currentUser?.roles?.includes('admin') || false;
+                                            const canEdit = isAdmin || fieldMeta.user_can_edit;
+                                            const fieldValue = profileFields[fieldMeta.field_key] || '';
+                                            return (_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsxs("span", { style: styles({ color: colors.text.secondary }), children: [fieldMeta.field_label, fieldMeta.required && _jsx("span", { style: styles({ color: colors.error.default }), children: " *" })] }), _jsx("input", { type: fieldMeta.field_type === 'int' ? 'number' : 'text', value: fieldValue, onChange: (e) => {
+                                                            const newValue = fieldMeta.field_type === 'int'
+                                                                ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
+                                                                : e.target.value;
+                                                            setProfileFields((prev) => ({
+                                                                ...prev,
+                                                                [fieldMeta.field_key]: newValue,
+                                                            }));
+                                                        }, placeholder: fieldMeta.required ? 'Required' : 'Optional', disabled: !canEdit, required: fieldMeta.required, style: styles({
+                                                            padding: `${spacing.sm} ${spacing.md}`,
+                                                            borderRadius: radius.md,
+                                                            border: `1px solid ${colors.border.default}`,
+                                                            backgroundColor: canEdit ? colors.bg.page : colors.bg.muted,
+                                                            color: colors.text.primary,
+                                                            fontSize: ts.body.fontSize,
+                                                            opacity: canEdit ? 1 : 0.6,
+                                                            cursor: canEdit ? 'text' : 'not-allowed',
+                                                        }) }), !canEdit && (_jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "This field can only be edited by administrators" }))] }, fieldMeta.field_key));
+                                        }), (profileStatus.error || profileStatus.success) && (_jsx("div", { style: styles({
                                                 padding: `${spacing.sm} ${spacing.md}`,
                                                 borderRadius: radius.md,
                                                 backgroundColor: colors.bg.muted,
