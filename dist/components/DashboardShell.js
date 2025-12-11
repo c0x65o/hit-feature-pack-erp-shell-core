@@ -215,9 +215,27 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const [notifications] = useState(initialNotifications);
     const [hitConfig, setHitConfig] = useState(null);
     const [currentUser, setCurrentUser] = useState(user);
-    const [themePreference, setThemePreference] = useState('dark');
-    const [resolvedTheme, setResolvedTheme] = useState('dark');
-    const [themeLoaded, setThemeLoaded] = useState(false);
+    // Initialize theme from DOM (set by blocking script) to prevent flash
+    const [themePreference, setThemePreference] = useState(() => {
+        // Read from localStorage/cookie on client
+        if (typeof window !== 'undefined') {
+            const saved = getSavedThemePreference();
+            if (saved)
+                return saved;
+        }
+        return 'system';
+    });
+    const [resolvedTheme, setResolvedTheme] = useState(() => {
+        // Read from DOM (already set by blocking script in layout.tsx)
+        if (typeof document !== 'undefined') {
+            return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        }
+        return 'dark';
+    });
+    const [themeLoaded, setThemeLoaded] = useState(() => {
+        // If we're on client, we already loaded theme from DOM
+        return typeof document !== 'undefined';
+    });
     const [profileForm, setProfileForm] = useState({
         name: user?.name || '',
         password: '',
@@ -458,12 +476,15 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     };
     const showSidebar = menuOpen;
     // Prevent flash of unstyled content during hydration
+    // Use CSS variables that respect the theme already set by blocking script in layout.tsx
     if (!mounted) {
         return (_jsx("div", { style: {
                 display: 'flex',
                 height: '100vh',
-                backgroundColor: '#0f0f0f',
-                color: '#fff',
+                // Use theme-aware colors: light theme = white bg, dark theme = dark bg
+                // The blocking script already set data-theme and .dark class on <html>
+                backgroundColor: resolvedTheme === 'light' ? '#ffffff' : '#0f0f0f',
+                color: resolvedTheme === 'light' ? '#0f0f0f' : '#ffffff',
             } }));
     }
     return (_jsxs(ShellContext.Provider, { value: contextValue, children: [_jsxs("div", { style: styles({
