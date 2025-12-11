@@ -528,9 +528,9 @@ function ShellContent({
       setProfileFields(data.profile_fields || {});
       setProfileForm((prev) => ({ ...prev, name: data.metadata?.name ?? prev.name ?? '' }));
       
-      // Fetch profile field metadata
+      // Fetch profile field metadata (including email)
       try {
-        const fieldsResponse = await fetch(`/api/proxy/auth/profile-fields`, {
+        const fieldsResponse = await fetch(`/api/proxy/auth/me/profile-fields`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (fieldsResponse.ok) {
@@ -1211,6 +1211,68 @@ function ShellContent({
               </div>
 
               <div style={styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md })}>
+                {/* Profile Fields - Integrated (including email) */}
+                {profileFieldMetadata
+                  .sort((a, b) => a.display_order - b.display_order)
+                  .map((fieldMeta) => {
+                    const isAdmin = currentUser?.roles?.includes('admin') || false;
+                    const canEdit = isAdmin || fieldMeta.user_can_edit;
+                    // Email comes from currentUser.email, other fields from profileFields
+                    const fieldValue = fieldMeta.field_key === 'email' 
+                      ? (currentUser?.email || '')
+                      : (profileFields[fieldMeta.field_key] || '');
+                    
+                    return (
+                      <label
+                        key={fieldMeta.field_key}
+                        style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}
+                      >
+                        <span style={styles({ color: colors.text.secondary })}>
+                          {fieldMeta.field_label}
+                          {fieldMeta.required && <span style={styles({ color: colors.error.default })}> *</span>}
+                        </span>
+                        <input
+                          type={fieldMeta.field_type === 'int' ? 'number' : fieldMeta.field_key === 'email' ? 'email' : 'text'}
+                          value={fieldValue}
+                          onChange={(e) => {
+                            if (fieldMeta.field_key === 'email') {
+                              // Email typically cannot be edited, but handle it if needed
+                              return;
+                            }
+                            const newValue = fieldMeta.field_type === 'int' 
+                              ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
+                              : e.target.value;
+                            setProfileFields((prev) => ({
+                              ...prev,
+                              [fieldMeta.field_key]: newValue,
+                            }));
+                          }}
+                          placeholder={fieldMeta.required ? 'Required' : 'Optional'}
+                          disabled={!canEdit || fieldMeta.field_key === 'email'}
+                          required={fieldMeta.required}
+                          style={styles({
+                            padding: `${spacing.sm} ${spacing.md}`,
+                            borderRadius: radius.md,
+                            border: `1px solid ${colors.border.default}`,
+                            backgroundColor: (canEdit && fieldMeta.field_key !== 'email') ? colors.bg.page : colors.bg.muted,
+                            color: colors.text.primary,
+                            fontSize: ts.body.fontSize,
+                            opacity: (canEdit && fieldMeta.field_key !== 'email') ? 1 : 0.6,
+                            cursor: (canEdit && fieldMeta.field_key !== 'email') ? 'text' : 'not-allowed',
+                          })}
+                        />
+                        {(!canEdit || fieldMeta.field_key === 'email') && (
+                          <span style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                            {fieldMeta.field_key === 'email' 
+                              ? 'Email cannot be changed'
+                              : 'This field can only be edited by administrators'}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+
+                {/* Display Name (metadata) - shown after profile fields */}
                 <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
                   <span style={styles({ color: colors.text.secondary })}>Display name</span>
                   <input
@@ -1228,6 +1290,7 @@ function ShellContent({
                   />
                 </label>
 
+                {/* Password fields */}
                 <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
                   <span style={styles({ color: colors.text.secondary })}>New password</span>
                   <input
@@ -1263,58 +1326,6 @@ function ShellContent({
                     })}
                   />
                 </label>
-
-                {/* Dynamic Profile Fields */}
-                {profileFieldMetadata
-                  .sort((a, b) => a.display_order - b.display_order)
-                  .map((fieldMeta) => {
-                    const isAdmin = currentUser?.roles?.includes('admin') || false;
-                    const canEdit = isAdmin || fieldMeta.user_can_edit;
-                    const fieldValue = profileFields[fieldMeta.field_key] || '';
-                    
-                    return (
-                      <label
-                        key={fieldMeta.field_key}
-                        style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}
-                      >
-                        <span style={styles({ color: colors.text.secondary })}>
-                          {fieldMeta.field_label}
-                          {fieldMeta.required && <span style={styles({ color: colors.error.default })}> *</span>}
-                        </span>
-                        <input
-                          type={fieldMeta.field_type === 'int' ? 'number' : 'text'}
-                          value={fieldValue}
-                          onChange={(e) => {
-                            const newValue = fieldMeta.field_type === 'int' 
-                              ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
-                              : e.target.value;
-                            setProfileFields((prev) => ({
-                              ...prev,
-                              [fieldMeta.field_key]: newValue,
-                            }));
-                          }}
-                          placeholder={fieldMeta.required ? 'Required' : 'Optional'}
-                          disabled={!canEdit}
-                          required={fieldMeta.required}
-                          style={styles({
-                            padding: `${spacing.sm} ${spacing.md}`,
-                            borderRadius: radius.md,
-                            border: `1px solid ${colors.border.default}`,
-                            backgroundColor: canEdit ? colors.bg.page : colors.bg.muted,
-                            color: colors.text.primary,
-                            fontSize: ts.body.fontSize,
-                            opacity: canEdit ? 1 : 0.6,
-                            cursor: canEdit ? 'text' : 'not-allowed',
-                          })}
-                        />
-                        {!canEdit && (
-                          <span style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                            This field can only be edited by administrators
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
 
                 {(profileStatus.error || profileStatus.success) && (
                   <div

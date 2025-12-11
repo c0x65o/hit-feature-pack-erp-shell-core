@@ -388,9 +388,9 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             setProfileMetadata(data.metadata || {});
             setProfileFields(data.profile_fields || {});
             setProfileForm((prev) => ({ ...prev, name: data.metadata?.name ?? prev.name ?? '' }));
-            // Fetch profile field metadata
+            // Fetch profile field metadata (including email)
             try {
-                const fieldsResponse = await fetch(`/api/proxy/auth/profile-fields`, {
+                const fieldsResponse = await fetch(`/api/proxy/auth/me/profile-fields`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (fieldsResponse.ok) {
@@ -773,7 +773,40 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                 width: '36px',
                                                 height: '36px',
                                                 backgroundColor: colors.bg.muted,
-                                            }, "aria-label": "Close profile settings", children: _jsx(X, { size: 18 }) })] }), _jsxs("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Display name" }), _jsx("input", { value: profileForm.name, onChange: (e) => setProfileForm((prev) => ({ ...prev, name: e.target.value })), placeholder: "Your name", style: styles({
+                                            }, "aria-label": "Close profile settings", children: _jsx(X, { size: 18 }) })] }), _jsxs("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [profileFieldMetadata
+                                            .sort((a, b) => a.display_order - b.display_order)
+                                            .map((fieldMeta) => {
+                                            const isAdmin = currentUser?.roles?.includes('admin') || false;
+                                            const canEdit = isAdmin || fieldMeta.user_can_edit;
+                                            // Email comes from currentUser.email, other fields from profileFields
+                                            const fieldValue = fieldMeta.field_key === 'email'
+                                                ? (currentUser?.email || '')
+                                                : (profileFields[fieldMeta.field_key] || '');
+                                            return (_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsxs("span", { style: styles({ color: colors.text.secondary }), children: [fieldMeta.field_label, fieldMeta.required && _jsx("span", { style: styles({ color: colors.error.default }), children: " *" })] }), _jsx("input", { type: fieldMeta.field_type === 'int' ? 'number' : fieldMeta.field_key === 'email' ? 'email' : 'text', value: fieldValue, onChange: (e) => {
+                                                            if (fieldMeta.field_key === 'email') {
+                                                                // Email typically cannot be edited, but handle it if needed
+                                                                return;
+                                                            }
+                                                            const newValue = fieldMeta.field_type === 'int'
+                                                                ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
+                                                                : e.target.value;
+                                                            setProfileFields((prev) => ({
+                                                                ...prev,
+                                                                [fieldMeta.field_key]: newValue,
+                                                            }));
+                                                        }, placeholder: fieldMeta.required ? 'Required' : 'Optional', disabled: !canEdit || fieldMeta.field_key === 'email', required: fieldMeta.required, style: styles({
+                                                            padding: `${spacing.sm} ${spacing.md}`,
+                                                            borderRadius: radius.md,
+                                                            border: `1px solid ${colors.border.default}`,
+                                                            backgroundColor: (canEdit && fieldMeta.field_key !== 'email') ? colors.bg.page : colors.bg.muted,
+                                                            color: colors.text.primary,
+                                                            fontSize: ts.body.fontSize,
+                                                            opacity: (canEdit && fieldMeta.field_key !== 'email') ? 1 : 0.6,
+                                                            cursor: (canEdit && fieldMeta.field_key !== 'email') ? 'text' : 'not-allowed',
+                                                        }) }), (!canEdit || fieldMeta.field_key === 'email') && (_jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: fieldMeta.field_key === 'email'
+                                                            ? 'Email cannot be changed'
+                                                            : 'This field can only be edited by administrators' }))] }, fieldMeta.field_key));
+                                        }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Display name" }), _jsx("input", { value: profileForm.name, onChange: (e) => setProfileForm((prev) => ({ ...prev, name: e.target.value })), placeholder: "Your name", style: styles({
                                                         padding: `${spacing.sm} ${spacing.md}`,
                                                         borderRadius: radius.md,
                                                         border: `1px solid ${colors.border.default}`,
@@ -794,31 +827,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         backgroundColor: colors.bg.page,
                                                         color: colors.text.primary,
                                                         fontSize: ts.body.fontSize,
-                                                    }) })] }), profileFieldMetadata
-                                            .sort((a, b) => a.display_order - b.display_order)
-                                            .map((fieldMeta) => {
-                                            const isAdmin = currentUser?.roles?.includes('admin') || false;
-                                            const canEdit = isAdmin || fieldMeta.user_can_edit;
-                                            const fieldValue = profileFields[fieldMeta.field_key] || '';
-                                            return (_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsxs("span", { style: styles({ color: colors.text.secondary }), children: [fieldMeta.field_label, fieldMeta.required && _jsx("span", { style: styles({ color: colors.error.default }), children: " *" })] }), _jsx("input", { type: fieldMeta.field_type === 'int' ? 'number' : 'text', value: fieldValue, onChange: (e) => {
-                                                            const newValue = fieldMeta.field_type === 'int'
-                                                                ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
-                                                                : e.target.value;
-                                                            setProfileFields((prev) => ({
-                                                                ...prev,
-                                                                [fieldMeta.field_key]: newValue,
-                                                            }));
-                                                        }, placeholder: fieldMeta.required ? 'Required' : 'Optional', disabled: !canEdit, required: fieldMeta.required, style: styles({
-                                                            padding: `${spacing.sm} ${spacing.md}`,
-                                                            borderRadius: radius.md,
-                                                            border: `1px solid ${colors.border.default}`,
-                                                            backgroundColor: canEdit ? colors.bg.page : colors.bg.muted,
-                                                            color: colors.text.primary,
-                                                            fontSize: ts.body.fontSize,
-                                                            opacity: canEdit ? 1 : 0.6,
-                                                            cursor: canEdit ? 'text' : 'not-allowed',
-                                                        }) }), !canEdit && (_jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "This field can only be edited by administrators" }))] }, fieldMeta.field_key));
-                                        }), (profileStatus.error || profileStatus.success) && (_jsx("div", { style: styles({
+                                                    }) })] }), (profileStatus.error || profileStatus.success) && (_jsx("div", { style: styles({
                                                 padding: `${spacing.sm} ${spacing.md}`,
                                                 borderRadius: radius.md,
                                                 backgroundColor: colors.bg.muted,
