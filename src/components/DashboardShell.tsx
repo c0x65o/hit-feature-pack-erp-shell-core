@@ -281,6 +281,211 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }: NavItemCo
 }
 
 // =============================================================================
+// COLLAPSED RAIL ICON COMPONENT WITH FLYOUT
+// =============================================================================
+
+interface CollapsedNavItemProps {
+  item: NavItem;
+  activePath: string;
+  onNavigate?: (path: string) => void;
+  allItems: NavItem[];
+}
+
+function CollapsedNavItem({ item, activePath, onNavigate, allItems }: CollapsedNavItemProps) {
+  const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
+  const [showFlyout, setShowFlyout] = useState(false);
+  const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  const hasChildren = item.children && item.children.length > 0;
+  const isActive = activePath === item.path || (hasChildren && item.children?.some(child => child.path === activePath));
+  const hasActiveChild = hasChildren && item.children?.some(child => child.path === activePath);
+
+  const iconName = item.icon
+    ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
+    : '';
+  const IconComponent = item.icon
+    ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[iconName]
+    : null;
+
+  const handleMouseEnter = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setShowFlyout(true);
+  };
+
+  const handleMouseLeave = () => {
+    // Delay closing by 500ms
+    closeTimeoutRef.current = setTimeout(() => {
+      setShowFlyout(false);
+    }, 500);
+  };
+
+  const handleClick = () => {
+    if (!hasChildren && item.path) {
+      if (onNavigate) {
+        onNavigate(item.path);
+      } else if (typeof window !== 'undefined') {
+        window.location.href = item.path;
+      }
+      setShowFlyout(false);
+    }
+  };
+
+  const handleChildClick = (path: string) => {
+    if (onNavigate) {
+      onNavigate(path);
+    } else if (typeof window !== 'undefined') {
+      window.location.href = path;
+    }
+    setShowFlyout(false);
+  };
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ position: 'relative' }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Icon button in the rail */}
+      <button
+        onClick={handleClick}
+        style={styles({
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '48px',
+          height: '48px',
+          margin: `${spacing.xs} auto`,
+          border: 'none',
+          borderRadius: radius.md,
+          cursor: 'pointer',
+          transition: 'all 150ms ease',
+          backgroundColor: (isActive && !hasChildren) || hasActiveChild ? colors.primary.default : 'transparent',
+          color: (isActive && !hasChildren) || hasActiveChild ? colors.text.inverse : colors.text.secondary,
+        })}
+        title={item.label}
+      >
+        {IconComponent ? <IconComponent size={22} /> : <span style={{ fontSize: '14px', fontWeight: 600 }}>{item.label.charAt(0)}</span>}
+      </button>
+
+      {/* Flyout menu */}
+      {showFlyout && (
+        <div
+          style={styles({
+            position: 'absolute',
+            left: '100%',
+            top: 0,
+            marginLeft: '4px',
+            minWidth: '220px',
+            maxWidth: '280px',
+            backgroundColor: colors.bg.surface,
+            border: `1px solid ${colors.border.default}`,
+            borderRadius: radius.md,
+            boxShadow: shadows.xl,
+            zIndex: 1000,
+            overflow: 'hidden',
+          })}
+        >
+          {/* Flyout header */}
+          <div
+            style={styles({
+              padding: `${spacing.md} ${spacing.lg}`,
+              borderBottom: `1px solid ${colors.border.subtle}`,
+              backgroundColor: colors.bg.muted,
+            })}
+          >
+            <div style={styles({
+              fontSize: ts.body.fontSize,
+              fontWeight: 600,
+              color: colors.text.primary,
+            })}>
+              {item.label}
+            </div>
+          </div>
+
+          {/* Flyout items */}
+          <div style={styles({ padding: spacing.sm })}>
+            {hasChildren ? (
+              item.children!.map((child, idx) => {
+                const childIconName = child.icon
+                  ? child.icon.charAt(0).toUpperCase() + child.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
+                  : '';
+                const ChildIconComponent = child.icon
+                  ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[childIconName]
+                  : null;
+                const childIsActive = activePath === child.path;
+
+                return (
+                  <button
+                    key={`flyout-${item.id}-${idx}`}
+                    onClick={() => handleChildClick(child.path!)}
+                    style={styles({
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: spacing.sm,
+                      width: '100%',
+                      padding: `${spacing.sm} ${spacing.md}`,
+                      border: 'none',
+                      borderRadius: radius.md,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 150ms ease',
+                      backgroundColor: childIsActive ? colors.primary.default : 'transparent',
+                      color: childIsActive ? colors.text.inverse : colors.text.secondary,
+                      fontSize: ts.body.fontSize,
+                    })}
+                  >
+                    {ChildIconComponent && <ChildIconComponent size={16} style={{ flexShrink: 0 }} />}
+                    <span style={styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
+                      {child.label}
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <button
+                onClick={() => handleChildClick(item.path!)}
+                style={styles({
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                  width: '100%',
+                  padding: `${spacing.sm} ${spacing.md}`,
+                  border: 'none',
+                  borderRadius: radius.md,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 150ms ease',
+                  backgroundColor: isActive ? colors.primary.default : 'transparent',
+                  color: isActive ? colors.text.inverse : colors.text.secondary,
+                  fontSize: ts.body.fontSize,
+                })}
+              >
+                {IconComponent && <IconComponent size={16} style={{ flexShrink: 0 }} />}
+                <span>Go to {item.label}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // NAV GROUP HEADER COMPONENT
 // =============================================================================
 

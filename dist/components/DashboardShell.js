@@ -1,6 +1,6 @@
 'use client';
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { Menu, Bell, User, Settings, LogOut, ChevronRight, ChevronDown, } from 'lucide-react';
 import { Monitor, Moon, Sun, X } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -187,6 +187,134 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }) {
                             minWidth: '20px',
                             textAlign: 'center',
                         }), children: item.badge })), hasChildren && (_jsx("span", { style: styles({ display: 'flex', marginRight: '-4px' }), children: isExpanded ? _jsx(ChevronDown, { size: 16 }) : _jsx(ChevronRight, { size: 16 }) }))] }), hasChildren && isExpanded && (_jsx("div", { style: styles({ marginTop: spacing.px }), children: item.children.map((child, idx) => (_jsx(NavItemComponent, { item: { ...child, id: `${item.id}-${idx}` }, level: level + 1, activePath: activePath, onNavigate: onNavigate }, `${item.id}-${idx}`))) }))] }));
+}
+function CollapsedNavItem({ item, activePath, onNavigate, allItems }) {
+    const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
+    const [showFlyout, setShowFlyout] = useState(false);
+    const closeTimeoutRef = React.useRef(null);
+    const containerRef = React.useRef(null);
+    const hasChildren = item.children && item.children.length > 0;
+    const isActive = activePath === item.path || (hasChildren && item.children?.some(child => child.path === activePath));
+    const hasActiveChild = hasChildren && item.children?.some(child => child.path === activePath);
+    const iconName = item.icon
+        ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
+        : '';
+    const IconComponent = item.icon
+        ? LucideIcons[iconName]
+        : null;
+    const handleMouseEnter = () => {
+        if (closeTimeoutRef.current) {
+            clearTimeout(closeTimeoutRef.current);
+            closeTimeoutRef.current = null;
+        }
+        setShowFlyout(true);
+    };
+    const handleMouseLeave = () => {
+        // Delay closing by 500ms
+        closeTimeoutRef.current = setTimeout(() => {
+            setShowFlyout(false);
+        }, 500);
+    };
+    const handleClick = () => {
+        if (!hasChildren && item.path) {
+            if (onNavigate) {
+                onNavigate(item.path);
+            }
+            else if (typeof window !== 'undefined') {
+                window.location.href = item.path;
+            }
+            setShowFlyout(false);
+        }
+    };
+    const handleChildClick = (path) => {
+        if (onNavigate) {
+            onNavigate(path);
+        }
+        else if (typeof window !== 'undefined') {
+            window.location.href = path;
+        }
+        setShowFlyout(false);
+    };
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+        return () => {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+        };
+    }, []);
+    return (_jsxs("div", { ref: containerRef, style: { position: 'relative' }, onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave, children: [_jsx("button", { onClick: handleClick, style: styles({
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '48px',
+                    height: '48px',
+                    margin: `${spacing.xs} auto`,
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: 'pointer',
+                    transition: 'all 150ms ease',
+                    backgroundColor: (isActive && !hasChildren) || hasActiveChild ? colors.primary.default : 'transparent',
+                    color: (isActive && !hasChildren) || hasActiveChild ? colors.text.inverse : colors.text.secondary,
+                }), title: item.label, children: IconComponent ? _jsx(IconComponent, { size: 22 }) : _jsx("span", { style: { fontSize: '14px', fontWeight: 600 }, children: item.label.charAt(0) }) }), showFlyout && (_jsxs("div", { style: styles({
+                    position: 'absolute',
+                    left: '100%',
+                    top: 0,
+                    marginLeft: '4px',
+                    minWidth: '220px',
+                    maxWidth: '280px',
+                    backgroundColor: colors.bg.surface,
+                    border: `1px solid ${colors.border.default}`,
+                    borderRadius: radius.md,
+                    boxShadow: shadows.xl,
+                    zIndex: 1000,
+                    overflow: 'hidden',
+                }), children: [_jsx("div", { style: styles({
+                            padding: `${spacing.md} ${spacing.lg}`,
+                            borderBottom: `1px solid ${colors.border.subtle}`,
+                            backgroundColor: colors.bg.muted,
+                        }), children: _jsx("div", { style: styles({
+                                fontSize: ts.body.fontSize,
+                                fontWeight: 600,
+                                color: colors.text.primary,
+                            }), children: item.label }) }), _jsx("div", { style: styles({ padding: spacing.sm }), children: hasChildren ? (item.children.map((child, idx) => {
+                            const childIconName = child.icon
+                                ? child.icon.charAt(0).toUpperCase() + child.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
+                                : '';
+                            const ChildIconComponent = child.icon
+                                ? LucideIcons[childIconName]
+                                : null;
+                            const childIsActive = activePath === child.path;
+                            return (_jsxs("button", { onClick: () => handleChildClick(child.path), style: styles({
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: spacing.sm,
+                                    width: '100%',
+                                    padding: `${spacing.sm} ${spacing.md}`,
+                                    border: 'none',
+                                    borderRadius: radius.md,
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'all 150ms ease',
+                                    backgroundColor: childIsActive ? colors.primary.default : 'transparent',
+                                    color: childIsActive ? colors.text.inverse : colors.text.secondary,
+                                    fontSize: ts.body.fontSize,
+                                }), children: [ChildIconComponent && _jsx(ChildIconComponent, { size: 16, style: { flexShrink: 0 } }), _jsx("span", { style: styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }), children: child.label })] }, `flyout-${item.id}-${idx}`));
+                        })) : (_jsxs("button", { onClick: () => handleChildClick(item.path), style: styles({
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: spacing.sm,
+                                width: '100%',
+                                padding: `${spacing.sm} ${spacing.md}`,
+                                border: 'none',
+                                borderRadius: radius.md,
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transition: 'all 150ms ease',
+                                backgroundColor: isActive ? colors.primary.default : 'transparent',
+                                color: isActive ? colors.text.inverse : colors.text.secondary,
+                                fontSize: ts.body.fontSize,
+                            }), children: [IconComponent && _jsx(IconComponent, { size: 16, style: { flexShrink: 0 } }), _jsxs("span", { children: ["Go to ", item.label] })] })) })] }))] }));
 }
 // =============================================================================
 // NAV GROUP HEADER COMPONENT
