@@ -348,17 +348,23 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
     }
   };
 
-  // Determine icon button background
+  // Determine icon button styles - more prominent hover
   const getIconBgColor = () => {
     if ((isActive && !hasChildren) || hasActiveChild) return colors.primary.default;
-    if (isHovered || isOpen) return colors.bg.elevated || colors.bg.muted;
+    if (isHovered || isOpen) return `${colors.primary.default}20`;
     return 'transparent';
   };
 
   const getIconColor = () => {
     if ((isActive && !hasChildren) || hasActiveChild) return colors.text.inverse;
-    if (isHovered || isOpen) return colors.text.primary;
+    if (isHovered || isOpen) return colors.primary.default;
     return colors.text.secondary;
+  };
+
+  const getIconBorder = () => {
+    if ((isActive && !hasChildren) || hasActiveChild) return 'none';
+    if (isHovered || isOpen) return `2px solid ${colors.primary.default}`;
+    return '2px solid transparent';
   };
 
   return (
@@ -378,7 +384,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
           width: '48px',
           height: '48px',
           margin: `${spacing.xs} auto`,
-          border: 'none',
+          border: getIconBorder(),
           borderRadius: radius.md,
           cursor: 'pointer',
           transition: 'all 150ms ease',
@@ -437,16 +443,16 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                 const childIsActive = activePath === child.path;
                 const childIsHovered = hoveredChildIdx === idx;
 
-                // Determine child button background
+                // Determine child button styles - more prominent hover
                 const getChildBgColor = () => {
                   if (childIsActive) return colors.primary.default;
-                  if (childIsHovered) return colors.bg.elevated || colors.bg.muted;
+                  if (childIsHovered) return `${colors.primary.default}18`;
                   return 'transparent';
                 };
 
                 const getChildColor = () => {
                   if (childIsActive) return colors.text.inverse;
-                  if (childIsHovered) return colors.text.primary;
+                  if (childIsHovered) return colors.primary.default;
                   return colors.text.secondary;
                 };
 
@@ -470,6 +476,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                       backgroundColor: getChildBgColor(),
                       color: getChildColor(),
                       fontSize: ts.body.fontSize,
+                      fontWeight: childIsHovered ? 500 : 400,
                     })}
                   >
                     {ChildIconComponent && <ChildIconComponent size={16} style={{ flexShrink: 0 }} />}
@@ -495,9 +502,10 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 150ms ease',
-                  backgroundColor: hoveredChildIdx === 0 ? (colors.bg.elevated || colors.bg.muted) : (isActive ? colors.primary.default : 'transparent'),
-                  color: hoveredChildIdx === 0 ? colors.text.primary : (isActive ? colors.text.inverse : colors.text.secondary),
+                  backgroundColor: hoveredChildIdx === 0 ? `${colors.primary.default}18` : (isActive ? colors.primary.default : 'transparent'),
+                  color: hoveredChildIdx === 0 ? colors.primary.default : (isActive ? colors.text.inverse : colors.text.secondary),
                   fontSize: ts.body.fontSize,
+                  fontWeight: hoveredChildIdx === 0 ? 500 : 400,
                 })}
               >
                 {IconComponent && <IconComponent size={16} style={{ flexShrink: 0 }} />}
