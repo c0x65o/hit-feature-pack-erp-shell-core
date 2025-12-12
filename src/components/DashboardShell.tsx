@@ -870,6 +870,14 @@ function ShellContent({
   };
 
   const showSidebar = menuOpen;
+  const COLLAPSED_RAIL_WIDTH = '64px';
+  const EXPANDED_SIDEBAR_WIDTH = '280px';
+
+  // Get all nav items for collapsed rail
+  const filteredNavItems = filterNavByRoles(navItems, currentUser?.roles);
+  const groupedNavItems = groupNavItems(filteredNavItems);
+  // Flatten all items for the collapsed rail
+  const allFlatNavItems = groupedNavItems.flatMap(group => group.items);
 
   // Prevent flash of unstyled content during hydration
   // Use CSS variables that respect the theme already set by blocking script in layout.tsx
@@ -894,97 +902,184 @@ function ShellContent({
         backgroundColor: colors.bg.page,
         color: colors.text.primary,
       })}>
-        {/* Sidebar */}
-        <aside style={styles({
-          width: showSidebar ? '280px' : '0px',
-          minWidth: showSidebar ? '280px' : '0px',
-          height: '100%',
-          backgroundColor: colors.bg.muted,
-          borderRight: showSidebar ? `1px solid ${colors.border.subtle}` : 'none',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          flexShrink: 0,
-        })}>
-          {/* Sidebar Header */}
-          <div style={styles({
-            height: '64px',
-            minWidth: '280px',
+        {/* Collapsed Rail - always visible, shows icons when sidebar is collapsed */}
+        {!showSidebar && (
+          <aside style={styles({
+            width: COLLAPSED_RAIL_WIDTH,
+            minWidth: COLLAPSED_RAIL_WIDTH,
+            height: '100%',
+            backgroundColor: colors.bg.muted,
+            borderRight: `1px solid ${colors.border.subtle}`,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: `0 ${spacing.lg}`,
-            borderBottom: `1px solid ${colors.border.subtle}`,
+            flexDirection: 'column',
             flexShrink: 0,
+            zIndex: 100,
           })}>
-            <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm })}>
-              <div style={styles({
-                width: '32px',
-                height: '32px',
-                background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
-                borderRadius: radius.lg,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              })}>
+            {/* Rail Header - Logo only */}
+            <div style={styles({
+              height: '64px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderBottom: `1px solid ${colors.border.subtle}`,
+              flexShrink: 0,
+            })}>
+              <button
+                onClick={() => setMenuOpen(true)}
+                style={styles({
+                  width: '40px',
+                  height: '40px',
+                  background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                  borderRadius: radius.md,
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'transform 150ms ease',
+                })}
+                title={`Expand ${config.brandName} navigation`}
+              >
                 {config.logoUrl ? (
-                  <img src={config.logoUrl} alt={config.brandName} style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+                  <img src={config.logoUrl} alt={config.brandName} style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                 ) : (
-                  <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.body.fontSize })}>
+                  <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.heading3.fontSize })}>
                     {config.brandName.charAt(0)}
                   </span>
                 )}
-              </div>
-              <span style={styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary })}>
-                {config.brandName}
-              </span>
+              </button>
             </div>
-            <button onClick={() => setMenuOpen(false)} style={{ ...iconButtonStyle, width: '36px', height: '36px' }}>
-              <Menu size={20} />
-            </button>
-          </div>
 
-          {/* Navigation */}
-          <nav style={styles({
-            flex: 1,
-            overflowY: 'auto',
-            padding: `${spacing.sm} ${spacing.md}`,
-            minWidth: '280px',
-          })}>
-            {groupNavItems(filterNavByRoles(navItems, currentUser?.roles)).map((group) => (
-              <div key={group.group}>
-                <NavGroupHeader label={group.label} />
-                {group.items.map((item) => (
-                  <NavItemComponent
-                    key={item.id}
-                    item={item}
-                    activePath={activePath}
-                    onNavigate={onNavigate}
-                  />
-                ))}
-              </div>
-            ))}
-          </nav>
+            {/* Rail Navigation Icons with Flyouts */}
+            <nav style={styles({
+              flex: 1,
+              overflowY: 'auto',
+              overflowX: 'visible',
+              padding: `${spacing.sm} 0`,
+            })}>
+              {allFlatNavItems.map((item) => (
+                <CollapsedNavItem
+                  key={item.id}
+                  item={item}
+                  activePath={activePath}
+                  onNavigate={onNavigate}
+                  allItems={allFlatNavItems}
+                />
+              ))}
+            </nav>
 
-          {/* Sidebar Footer */}
-          <div style={styles({
-            padding: spacing.lg,
-            borderTop: `1px solid ${colors.border.subtle}`,
-            flexShrink: 0,
-            minWidth: '280px',
-          })}>
-            <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm, fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+            {/* Rail Footer - Status indicator */}
+            <div style={styles({
+              padding: spacing.md,
+              borderTop: `1px solid ${colors.border.subtle}`,
+              flexShrink: 0,
+              display: 'flex',
+              justifyContent: 'center',
+            })}>
               <div style={styles({
-                width: '8px',
-                height: '8px',
+                width: '10px',
+                height: '10px',
                 backgroundColor: colors.success.default,
                 borderRadius: radius.full,
-              })} />
-              <span>System Online</span>
+              })} title="System Online" />
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
+
+        {/* Expanded Sidebar - Full navigation */}
+        {showSidebar && (
+          <aside style={styles({
+            width: EXPANDED_SIDEBAR_WIDTH,
+            minWidth: EXPANDED_SIDEBAR_WIDTH,
+            height: '100%',
+            backgroundColor: colors.bg.muted,
+            borderRight: `1px solid ${colors.border.subtle}`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            flexShrink: 0,
+          })}>
+            {/* Sidebar Header */}
+            <div style={styles({
+              height: '64px',
+              minWidth: EXPANDED_SIDEBAR_WIDTH,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `0 ${spacing.lg}`,
+              borderBottom: `1px solid ${colors.border.subtle}`,
+              flexShrink: 0,
+            })}>
+              <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm })}>
+                <div style={styles({
+                  width: '32px',
+                  height: '32px',
+                  background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                  borderRadius: radius.md,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                })}>
+                  {config.logoUrl ? (
+                    <img src={config.logoUrl} alt={config.brandName} style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+                  ) : (
+                    <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.body.fontSize })}>
+                      {config.brandName.charAt(0)}
+                    </span>
+                  )}
+                </div>
+                <span style={styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary })}>
+                  {config.brandName}
+                </span>
+              </div>
+              <button onClick={() => setMenuOpen(false)} style={{ ...iconButtonStyle, width: '36px', height: '36px' }}>
+                <Menu size={20} />
+              </button>
+            </div>
+
+            {/* Navigation */}
+            <nav style={styles({
+              flex: 1,
+              overflowY: 'auto',
+              padding: `${spacing.sm} ${spacing.md}`,
+              minWidth: EXPANDED_SIDEBAR_WIDTH,
+            })}>
+              {groupedNavItems.map((group) => (
+                <div key={group.group}>
+                  <NavGroupHeader label={group.label} />
+                  {group.items.map((item) => (
+                    <NavItemComponent
+                      key={item.id}
+                      item={item}
+                      activePath={activePath}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              ))}
+            </nav>
+
+            {/* Sidebar Footer */}
+            <div style={styles({
+              padding: spacing.lg,
+              borderTop: `1px solid ${colors.border.subtle}`,
+              flexShrink: 0,
+              minWidth: EXPANDED_SIDEBAR_WIDTH,
+            })}>
+              <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm, fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                <div style={styles({
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: colors.success.default,
+                  borderRadius: radius.full,
+                })} />
+                <span>System Online</span>
+              </div>
+            </div>
+          </aside>
+        )}
 
         {/* Main Content */}
         <div style={styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' })}>
@@ -1000,11 +1095,7 @@ function ShellContent({
             flexShrink: 0,
           })}>
             <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.lg })}>
-              {!showSidebar && (
-                <button onClick={() => setMenuOpen(true)} style={iconButtonStyle}>
-                  <Menu size={20} />
-                </button>
-              )}
+              {/* Spacer - navigation is handled by collapsed rail */}
             </div>
 
             <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm })}>

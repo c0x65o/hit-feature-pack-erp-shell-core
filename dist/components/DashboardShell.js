@@ -642,6 +642,13 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         transition: 'all 150ms ease',
     };
     const showSidebar = menuOpen;
+    const COLLAPSED_RAIL_WIDTH = '64px';
+    const EXPANDED_SIDEBAR_WIDTH = '280px';
+    // Get all nav items for collapsed rail
+    const filteredNavItems = filterNavByRoles(navItems, currentUser?.roles);
+    const groupedNavItems = groupNavItems(filteredNavItems);
+    // Flatten all items for the collapsed rail
+    const allFlatNavItems = groupedNavItems.flatMap(group => group.items);
     // Prevent flash of unstyled content during hydration
     // Use CSS variables that respect the theme already set by blocking script in layout.tsx
     if (!mounted) {
@@ -659,19 +666,64 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                     height: '100vh',
                     backgroundColor: colors.bg.page,
                     color: colors.text.primary,
-                }), children: [_jsxs("aside", { style: styles({
-                            width: showSidebar ? '280px' : '0px',
-                            minWidth: showSidebar ? '280px' : '0px',
+                }), children: [!showSidebar && (_jsxs("aside", { style: styles({
+                            width: COLLAPSED_RAIL_WIDTH,
+                            minWidth: COLLAPSED_RAIL_WIDTH,
                             height: '100%',
                             backgroundColor: colors.bg.muted,
-                            borderRight: showSidebar ? `1px solid ${colors.border.subtle}` : 'none',
+                            borderRight: `1px solid ${colors.border.subtle}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            flexShrink: 0,
+                            zIndex: 100,
+                        }), children: [_jsx("div", { style: styles({
+                                    height: '64px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderBottom: `1px solid ${colors.border.subtle}`,
+                                    flexShrink: 0,
+                                }), children: _jsx("button", { onClick: () => setMenuOpen(true), style: styles({
+                                        width: '40px',
+                                        height: '40px',
+                                        background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                                        borderRadius: radius.md,
+                                        border: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        overflow: 'hidden',
+                                        cursor: 'pointer',
+                                        transition: 'transform 150ms ease',
+                                    }), title: `Expand ${config.brandName} navigation`, children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '24px', height: '24px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.heading3.fontSize }), children: config.brandName.charAt(0) })) }) }), _jsx("nav", { style: styles({
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    overflowX: 'visible',
+                                    padding: `${spacing.sm} 0`,
+                                }), children: allFlatNavItems.map((item) => (_jsx(CollapsedNavItem, { item: item, activePath: activePath, onNavigate: onNavigate, allItems: allFlatNavItems }, item.id))) }), _jsx("div", { style: styles({
+                                    padding: spacing.md,
+                                    borderTop: `1px solid ${colors.border.subtle}`,
+                                    flexShrink: 0,
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                }), children: _jsx("div", { style: styles({
+                                        width: '10px',
+                                        height: '10px',
+                                        backgroundColor: colors.success.default,
+                                        borderRadius: radius.full,
+                                    }), title: "System Online" }) })] })), showSidebar && (_jsxs("aside", { style: styles({
+                            width: EXPANDED_SIDEBAR_WIDTH,
+                            minWidth: EXPANDED_SIDEBAR_WIDTH,
+                            height: '100%',
+                            backgroundColor: colors.bg.muted,
+                            borderRight: `1px solid ${colors.border.subtle}`,
                             display: 'flex',
                             flexDirection: 'column',
                             overflow: 'hidden',
                             flexShrink: 0,
                         }), children: [_jsxs("div", { style: styles({
                                     height: '64px',
-                                    minWidth: '280px',
+                                    minWidth: EXPANDED_SIDEBAR_WIDTH,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
@@ -682,7 +734,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                     width: '32px',
                                                     height: '32px',
                                                     background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
-                                                    borderRadius: radius.lg,
+                                                    borderRadius: radius.md,
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -691,18 +743,18 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                     flex: 1,
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} ${spacing.md}`,
-                                    minWidth: '280px',
-                                }), children: groupNavItems(filterNavByRoles(navItems, currentUser?.roles)).map((group) => (_jsxs("div", { children: [_jsx(NavGroupHeader, { label: group.label }), group.items.map((item) => (_jsx(NavItemComponent, { item: item, activePath: activePath, onNavigate: onNavigate }, item.id)))] }, group.group))) }), _jsx("div", { style: styles({
+                                    minWidth: EXPANDED_SIDEBAR_WIDTH,
+                                }), children: groupedNavItems.map((group) => (_jsxs("div", { children: [_jsx(NavGroupHeader, { label: group.label }), group.items.map((item) => (_jsx(NavItemComponent, { item: item, activePath: activePath, onNavigate: onNavigate }, item.id)))] }, group.group))) }), _jsx("div", { style: styles({
                                     padding: spacing.lg,
                                     borderTop: `1px solid ${colors.border.subtle}`,
                                     flexShrink: 0,
-                                    minWidth: '280px',
+                                    minWidth: EXPANDED_SIDEBAR_WIDTH,
                                 }), children: _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm, fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: [_jsx("div", { style: styles({
                                                 width: '8px',
                                                 height: '8px',
                                                 backgroundColor: colors.success.default,
                                                 borderRadius: radius.full,
-                                            }) }), _jsx("span", { children: "System Online" })] }) })] }), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
+                                            }) }), _jsx("span", { children: "System Online" })] }) })] })), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
                                     height: '64px',
                                     backgroundColor: colors.bg.surface,
                                     borderBottom: `1px solid ${colors.border.subtle}`,
@@ -711,7 +763,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                     justifyContent: 'space-between',
                                     padding: `0 ${spacing['2xl']}`,
                                     flexShrink: 0,
-                                }), children: [_jsx("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.lg }), children: !showSidebar && (_jsx("button", { onClick: () => setMenuOpen(true), style: iconButtonStyle, children: _jsx(Menu, { size: 20 }) })) }), _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm }), children: [config.showThemeToggle && (_jsx("button", { onClick: openAppearance, style: iconButtonStyle, "aria-label": "Theme settings", children: resolvedTheme === 'dark' ? _jsx(Moon, { size: 20 }) : _jsx(Sun, { size: 20 }) })), config.showNotifications && (_jsx("div", { style: { position: 'relative' }, children: _jsxs("button", { onClick: () => { setShowNotifications(!showNotifications); setShowProfileMenu(false); }, style: iconButtonStyle, children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && (_jsx("span", { style: styles({
+                                }), children: [_jsx("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.lg }) }), _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm }), children: [config.showThemeToggle && (_jsx("button", { onClick: openAppearance, style: iconButtonStyle, "aria-label": "Theme settings", children: resolvedTheme === 'dark' ? _jsx(Moon, { size: 20 }) : _jsx(Sun, { size: 20 }) })), config.showNotifications && (_jsx("div", { style: { position: 'relative' }, children: _jsxs("button", { onClick: () => { setShowNotifications(!showNotifications); setShowProfileMenu(false); }, style: iconButtonStyle, children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && (_jsx("span", { style: styles({
                                                                 position: 'absolute',
                                                                 top: '4px',
                                                                 right: '4px',
