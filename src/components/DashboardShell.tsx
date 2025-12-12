@@ -1002,7 +1002,7 @@ function ShellContent({
                 style={styles({
                   width: '40px',
                   height: '40px',
-                  background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                  background: 'linear-gradient(135deg, #F26522, #FF8C42)',
                   borderRadius: radius.md,
                   border: 'none',
                   display: 'flex',
@@ -1017,7 +1017,7 @@ function ShellContent({
                 {config.logoUrl ? (
                   <img src={config.logoUrl} alt={config.brandName} style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                 ) : (
-                  <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.heading3.fontSize })}>
+                  <span style={styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.heading3.fontSize })}>
                     {config.brandName.charAt(0)}
                   </span>
                 )}
@@ -1090,7 +1090,7 @@ function ShellContent({
                 <div style={styles({
                   width: '32px',
                   height: '32px',
-                  background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                  background: 'linear-gradient(135deg, #F26522, #FF8C42)',
                   borderRadius: radius.md,
                   display: 'flex',
                   alignItems: 'center',
@@ -1100,7 +1100,7 @@ function ShellContent({
                   {config.logoUrl ? (
                     <img src={config.logoUrl} alt={config.brandName} style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
                   ) : (
-                    <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.body.fontSize })}>
+                    <span style={styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.body.fontSize })}>
                       {config.brandName.charAt(0)}
                     </span>
                   )}
@@ -1787,8 +1787,11 @@ export function DashboardShell({
   const providerDefaultTheme: 'light' | 'dark' =
     config.defaultTheme === 'light' ? 'light' : config.defaultTheme === 'dark' ? 'dark' : 'dark';
 
+  // Build color overrides if primaryColor is configured
+  const colorOverrides = config.primaryColor ? { primary: config.primaryColor } : undefined;
+
   return (
-    <ThemeProvider defaultTheme={providerDefaultTheme}>
+    <ThemeProvider defaultTheme={providerDefaultTheme} colorOverrides={colorOverrides}>
       <ShellContent
         config={config}
         navItems={navItems}

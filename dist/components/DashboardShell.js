@@ -749,7 +749,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                 }), children: _jsx("button", { onClick: () => setMenuOpen(true), style: styles({
                                         width: '40px',
                                         height: '40px',
-                                        background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                                        background: 'linear-gradient(135deg, #F26522, #FF8C42)',
                                         borderRadius: radius.md,
                                         border: 'none',
                                         display: 'flex',
@@ -758,7 +758,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                         overflow: 'hidden',
                                         cursor: 'pointer',
                                         transition: 'transform 150ms ease',
-                                    }), title: `Expand ${config.brandName} navigation`, children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '24px', height: '24px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.heading3.fontSize }), children: config.brandName.charAt(0) })) }) }), _jsx("nav", { style: styles({
+                                    }), title: `Expand ${config.brandName} navigation`, children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '24px', height: '24px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.heading3.fontSize }), children: config.brandName.charAt(0) })) }) }), _jsx("nav", { style: styles({
                                     flex: 1,
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} 0`,
@@ -795,13 +795,13 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                 }), children: [_jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm }), children: [_jsx("div", { style: styles({
                                                     width: '32px',
                                                     height: '32px',
-                                                    background: `linear-gradient(135deg, ${colors.primary.default}, ${colors.accent.default})`,
+                                                    background: 'linear-gradient(135deg, #F26522, #FF8C42)',
                                                     borderRadius: radius.md,
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     overflow: 'hidden',
-                                                }), children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '20px', height: '20px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 700, fontSize: ts.body.fontSize }), children: config.brandName.charAt(0) })) }), _jsx("span", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary }), children: config.brandName })] }), _jsx("button", { onClick: () => setMenuOpen(false), style: { ...iconButtonStyle, width: '36px', height: '36px' }, children: _jsx(Menu, { size: 20 }) })] }), _jsx("nav", { style: styles({
+                                                }), children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '20px', height: '20px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.body.fontSize }), children: config.brandName.charAt(0) })) }), _jsx("span", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary }), children: config.brandName })] }), _jsx("button", { onClick: () => setMenuOpen(false), style: { ...iconButtonStyle, width: '36px', height: '36px' }, children: _jsx(Menu, { size: 20 }) })] }), _jsx("nav", { style: styles({
                                     flex: 1,
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} ${spacing.md}`,
@@ -1109,6 +1109,8 @@ export function DashboardShell({ children, config: configProp = {}, navItems = [
         defaultTheme: configProp.defaultTheme || 'system',
     };
     const providerDefaultTheme = config.defaultTheme === 'light' ? 'light' : config.defaultTheme === 'dark' ? 'dark' : 'dark';
-    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, children: children }) }));
+    // Build color overrides if primaryColor is configured
+    const colorOverrides = config.primaryColor ? { primary: config.primaryColor } : undefined;
+    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, colorOverrides: colorOverrides, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, children: children }) }));
 }
 export default DashboardShell;

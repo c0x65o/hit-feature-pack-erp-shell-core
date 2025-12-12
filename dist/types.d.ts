@@ -25,6 +25,15 @@ export interface NavItem {
 /**
  * Shell configuration options
  */
+/**
+ * Primary color theme configuration
+ */
+export interface PrimaryColorConfig {
+    default: string;
+    hover: string;
+    light: string;
+    dark: string;
+}
 export interface ShellConfig {
     brandName: string;
     logoUrl?: string;
@@ -33,6 +42,8 @@ export interface ShellConfig {
     showThemeToggle: boolean;
     showUserMenu: boolean;
     defaultTheme: 'light' | 'dark' | 'system';
+    /** Custom primary color (overrides default blue) */
+    primaryColor?: PrimaryColorConfig;
 }
 /**
  * User information for profile menu
