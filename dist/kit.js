@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown } from 'lucide-react';
-import { DataTable } from '@hit/ui-kit';
+import { DataTable, AlertDialog, Breadcrumb, Help } from '@hit/ui-kit';
 // =============================================================================
 // ERP DESIGN SYSTEM
 // =============================================================================
@@ -778,7 +778,8 @@ const EmptyState = ({ icon, title, description, action }) => {
 // Tabs
 // -----------------------------------------------------------------------------
 const Tabs = ({ tabs, activeTab, onChange }) => {
-    const currentTab = activeTab || tabs[0]?.id;
+    const getTabId = (tab) => tab.id ?? tab.value ?? '';
+    const currentTab = activeTab || getTabId(tabs[0] || {});
     return React.createElement('div', null, React.createElement('div', {
         style: {
             display: 'flex',
@@ -786,22 +787,29 @@ const Tabs = ({ tabs, activeTab, onChange }) => {
             borderBottom: `1px solid ${colors.border.subtle}`,
             marginBottom: '20px',
         },
-    }, tabs.map((tab) => React.createElement('button', {
-        key: tab.id,
-        onClick: () => onChange?.(tab.id),
-        style: {
-            padding: '12px 16px',
-            fontSize: '14px',
-            fontWeight: '500',
-            color: currentTab === tab.id ? colors.primary.default : colors.text.secondary,
-            background: 'none',
-            border: 'none',
-            borderBottom: currentTab === tab.id ? `2px solid ${colors.primary.default}` : '2px solid transparent',
-            marginBottom: '-1px',
-            cursor: 'pointer',
-            transition: 'all 150ms ease',
-        },
-    }, tab.label))), tabs.find((tab) => tab.id === currentTab)?.content);
+    }, tabs.map((tab) => {
+        const tabId = getTabId(tab);
+        return React.createElement('button', {
+            key: tabId,
+            onClick: () => {
+                if (tabId) {
+                    onChange?.(tabId);
+                }
+            },
+            style: {
+                padding: '12px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: currentTab === tabId ? colors.primary.default : colors.text.secondary,
+                background: 'none',
+                border: 'none',
+                borderBottom: currentTab === tabId ? `2px solid ${colors.primary.default}` : '2px solid transparent',
+                marginBottom: '-1px',
+                cursor: 'pointer',
+                transition: 'all 150ms ease',
+            },
+        }, tab.label);
+    })), tabs.find((tab) => getTabId(tab) === currentTab)?.content);
 };
 // -----------------------------------------------------------------------------
 // Dropdown
@@ -883,8 +891,11 @@ export const erpKit = {
     Avatar,
     Alert,
     Modal,
+    AlertDialog,
     Spinner,
     EmptyState,
     Tabs,
     Dropdown,
+    Breadcrumb,
+    Help,
 };

@@ -1109,8 +1109,6 @@ export function DashboardShell({ children, config: configProp = {}, navItems = [
         defaultTheme: configProp.defaultTheme || 'system',
     };
     const providerDefaultTheme = config.defaultTheme === 'light' ? 'light' : config.defaultTheme === 'dark' ? 'dark' : 'dark';
-    // Build color overrides if primaryColor is configured
-    const colorOverrides = config.primaryColor ? { primary: config.primaryColor } : undefined;
-    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, colorOverrides: colorOverrides, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, children: children }) }));
+    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, children: children }) }));
 }
 export default DashboardShell;

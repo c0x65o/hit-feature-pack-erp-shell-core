@@ -3,7 +3,7 @@
 import React from 'react';
 import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { UiKit } from '@hit/ui-kit';
-import { DataTable } from '@hit/ui-kit';
+import { DataTable, AlertDialog, Breadcrumb, Help } from '@hit/ui-kit';
 
 // =============================================================================
 // ERP DESIGN SYSTEM
@@ -900,7 +900,8 @@ const EmptyState: UiKit['EmptyState'] = ({ icon, title, description, action }) =
 // Tabs
 // -----------------------------------------------------------------------------
 const Tabs: UiKit['Tabs'] = ({ tabs, activeTab, onChange }) => {
-  const currentTab = activeTab || tabs[0]?.id;
+  const getTabId = (tab: { id?: string; value?: string }) => tab.id ?? tab.value ?? '';
+  const currentTab = activeTab || getTabId(tabs[0] || {});
 
   return React.createElement('div', null,
     React.createElement('div', {
@@ -911,26 +912,31 @@ const Tabs: UiKit['Tabs'] = ({ tabs, activeTab, onChange }) => {
         marginBottom: '20px',
       },
     },
-      tabs.map((tab) =>
-        React.createElement('button', {
-          key: tab.id,
-          onClick: () => onChange?.(tab.id),
+      tabs.map((tab) => {
+        const tabId = getTabId(tab);
+        return React.createElement('button', {
+          key: tabId,
+          onClick: () => {
+            if (tabId) {
+              onChange?.(tabId);
+            }
+          },
           style: {
             padding: '12px 16px',
             fontSize: '14px',
             fontWeight: '500',
-            color: currentTab === tab.id ? colors.primary.default : colors.text.secondary,
+            color: currentTab === tabId ? colors.primary.default : colors.text.secondary,
             background: 'none',
             border: 'none',
-            borderBottom: currentTab === tab.id ? `2px solid ${colors.primary.default}` : '2px solid transparent',
+            borderBottom: currentTab === tabId ? `2px solid ${colors.primary.default}` : '2px solid transparent',
             marginBottom: '-1px',
             cursor: 'pointer',
             transition: 'all 150ms ease',
           },
-        }, tab.label)
-      )
+        }, tab.label);
+      })
     ),
-    tabs.find((tab) => tab.id === currentTab)?.content
+    tabs.find((tab) => getTabId(tab) === currentTab)?.content
   );
 };
 
@@ -1030,8 +1036,11 @@ export const erpKit: UiKit = {
   Avatar,
   Alert,
   Modal,
+  AlertDialog,
   Spinner,
   EmptyState,
   Tabs,
   Dropdown,
+  Breadcrumb,
+  Help,
 };

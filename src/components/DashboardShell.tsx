@@ -1787,11 +1787,8 @@ export function DashboardShell({
   const providerDefaultTheme: 'light' | 'dark' =
     config.defaultTheme === 'light' ? 'light' : config.defaultTheme === 'dark' ? 'dark' : 'dark';
 
-  // Build color overrides if primaryColor is configured
-  const colorOverrides = config.primaryColor ? { primary: config.primaryColor } : undefined;
-
   return (
-    <ThemeProvider defaultTheme={providerDefaultTheme} colorOverrides={colorOverrides}>
+    <ThemeProvider defaultTheme={providerDefaultTheme}>
       <ShellContent
         config={config}
         navItems={navItems}
