@@ -360,7 +360,7 @@ function NavGroupHeader({ label }) {
             textTransform: 'uppercase',
         }), children: label }));
 }
-function ShellContent({ children, config, navItems, user, activePath, onNavigate, onLogout, initialNotifications, }) {
+function ShellContent({ children, config, navItems, user, activePath, onNavigate, onLogout, initialNotifications, connectionStatus = 'connected', }) {
     const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
     const { setTheme: setUiKitTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -771,9 +771,16 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                 }), children: _jsx("div", { style: styles({
                                         width: '10px',
                                         height: '10px',
-                                        backgroundColor: colors.success.default,
+                                        backgroundColor: connectionStatus === 'connected' ? colors.success.default
+                                            : connectionStatus === 'connecting' ? colors.warning.default
+                                                : connectionStatus === 'polling' ? colors.warning.default
+                                                    : colors.error.default,
                                         borderRadius: radius.full,
-                                    }), title: "System Online" }) })] })), showSidebar && (_jsxs("aside", { style: styles({
+                                        ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+                                    }), title: connectionStatus === 'connected' ? 'WebSocket Connected'
+                                        : connectionStatus === 'connecting' ? 'Connecting...'
+                                            : connectionStatus === 'polling' ? 'Polling (WebSocket unavailable)'
+                                                : 'Disconnected' }) })] })), showSidebar && (_jsxs("aside", { style: styles({
                             width: EXPANDED_SIDEBAR_WIDTH,
                             minWidth: EXPANDED_SIDEBAR_WIDTH,
                             height: '100%',
@@ -814,9 +821,16 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                 }), children: _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm, fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: [_jsx("div", { style: styles({
                                                 width: '8px',
                                                 height: '8px',
-                                                backgroundColor: colors.success.default,
+                                                backgroundColor: connectionStatus === 'connected' ? colors.success.default
+                                                    : connectionStatus === 'connecting' ? colors.warning.default
+                                                        : connectionStatus === 'polling' ? colors.warning.default
+                                                            : colors.error.default,
                                                 borderRadius: radius.full,
-                                            }) }), _jsx("span", { children: "System Online" })] }) })] })), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
+                                                ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+                                            }) }), _jsx("span", { children: connectionStatus === 'connected' ? 'Connected'
+                                                : connectionStatus === 'connecting' ? 'Connecting...'
+                                                    : connectionStatus === 'polling' ? 'Polling'
+                                                        : 'Disconnected' })] }) })] })), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
                                     height: '64px',
                                     backgroundColor: colors.bg.surface,
                                     borderBottom: `1px solid ${colors.border.subtle}`,
@@ -1098,7 +1112,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         opacity: profileStatus.saving ? 0.8 : 1,
                                                     }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] })] }) })] }))] }));
 }
-export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], }) {
+export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], connectionStatus = 'connected', }) {
     const config = {
         brandName: configProp.brandName || 'HIT',
         logoUrl: configProp.logoUrl,
@@ -1109,6 +1123,6 @@ export function DashboardShell({ children, config: configProp = {}, navItems = [
         defaultTheme: configProp.defaultTheme || 'system',
     };
     const providerDefaultTheme = config.defaultTheme === 'light' ? 'light' : config.defaultTheme === 'dark' ? 'dark' : 'dark';
-    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, children: children }) }));
+    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, connectionStatus: connectionStatus, children: children }) }));
 }
 export default DashboardShell;

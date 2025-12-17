@@ -1,4 +1,8 @@
 /**
+ * WebSocket/real-time connection status
+ */
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'polling';
+/**
  * Navigation group names
  */
 export type NavGroup = 'main' | 'system' | string;

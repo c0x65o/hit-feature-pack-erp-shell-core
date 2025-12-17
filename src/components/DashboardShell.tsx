@@ -13,7 +13,7 @@ import {
 import { Monitor, Moon, Sun, X } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit } from '@hit/ui-kit';
-import type { NavItem, ShellUser, Notification, ShellConfig } from '../types';
+import type { NavItem, ShellUser, Notification, ShellConfig, ConnectionStatus } from '../types';
 
 // =============================================================================
 // CONTEXT
@@ -544,6 +544,8 @@ function NavGroupHeader({ label }: { label: string }) {
 // SHELL CONTENT (USES THEME)
 // =============================================================================
 
+type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'polling';
+
 interface ShellContentProps {
   children: React.ReactNode;
   config: ShellConfig;
@@ -553,6 +555,7 @@ interface ShellContentProps {
   onNavigate?: (path: string) => void;
   onLogout?: () => void;
   initialNotifications: Notification[];
+  connectionStatus?: ConnectionStatus;
 }
 
 function ShellContent({
@@ -564,6 +567,7 @@ function ShellContent({
   onNavigate,
   onLogout,
   initialNotifications,
+  connectionStatus = 'connected',
 }: ShellContentProps) {
   const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
   const { setTheme: setUiKitTheme } = useTheme();
@@ -1044,7 +1048,7 @@ function ShellContent({
               ))}
             </nav>
 
-            {/* Rail Footer - Status indicator */}
+            {/* Rail Footer - Connection status indicator */}
             <div style={styles({
               padding: spacing.md,
               borderTop: `1px solid ${colors.border.subtle}`,
@@ -1055,9 +1059,18 @@ function ShellContent({
               <div style={styles({
                 width: '10px',
                 height: '10px',
-                backgroundColor: colors.success.default,
+                backgroundColor: connectionStatus === 'connected' ? colors.success.default 
+                  : connectionStatus === 'connecting' ? colors.warning.default
+                  : connectionStatus === 'polling' ? colors.warning.default
+                  : colors.error.default,
                 borderRadius: radius.full,
-              })} title="System Online" />
+                ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+              })} title={
+                connectionStatus === 'connected' ? 'WebSocket Connected' 
+                : connectionStatus === 'connecting' ? 'Connecting...'
+                : connectionStatus === 'polling' ? 'Polling (WebSocket unavailable)'
+                : 'Disconnected'
+              } />
             </div>
           </aside>
         )}
@@ -1136,7 +1149,7 @@ function ShellContent({
               ))}
             </nav>
 
-            {/* Sidebar Footer */}
+            {/* Sidebar Footer - Connection status */}
             <div style={styles({
               padding: spacing.lg,
               borderTop: `1px solid ${colors.border.subtle}`,
@@ -1147,10 +1160,19 @@ function ShellContent({
                 <div style={styles({
                   width: '8px',
                   height: '8px',
-                  backgroundColor: colors.success.default,
+                  backgroundColor: connectionStatus === 'connected' ? colors.success.default 
+                    : connectionStatus === 'connecting' ? colors.warning.default
+                    : connectionStatus === 'polling' ? colors.warning.default
+                    : colors.error.default,
                   borderRadius: radius.full,
+                  ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
                 })} />
-                <span>System Online</span>
+                <span>
+                  {connectionStatus === 'connected' ? 'Connected' 
+                    : connectionStatus === 'connecting' ? 'Connecting...'
+                    : connectionStatus === 'polling' ? 'Polling'
+                    : 'Disconnected'}
+                </span>
               </div>
             </div>
           </aside>
@@ -1762,6 +1784,8 @@ interface DashboardShellProps {
   onNavigate?: (path: string) => void;
   onLogout?: () => void;
   initialNotifications?: Notification[];
+  /** WebSocket/real-time connection status for the status indicator */
+  connectionStatus?: ConnectionStatus;
 }
 
 export function DashboardShell({
@@ -1773,6 +1797,7 @@ export function DashboardShell({
   onNavigate,
   onLogout,
   initialNotifications = [],
+  connectionStatus = 'connected',
 }: DashboardShellProps) {
   const config: ShellConfig = {
     brandName: configProp.brandName || 'HIT',
@@ -1797,6 +1822,7 @@ export function DashboardShell({
         onNavigate={onNavigate}
         onLogout={onLogout}
         initialNotifications={initialNotifications}
+        connectionStatus={connectionStatus}
       >
         {children}
       </ShellContent>
