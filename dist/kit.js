@@ -287,9 +287,16 @@ const Button = ({ variant = 'primary', size = 'md', loading, disabled, type = 'b
 // Input - Fixed height, consistent styling
 // -----------------------------------------------------------------------------
 const Input = ({ label, type = 'text', placeholder, value, onChange, error, disabled, required, className }) => {
+    // Check if className contains flex-1 or similar flex grow classes
+    const shouldFlex = className?.includes('flex-1') || className?.includes('flex-grow');
     return React.createElement('div', {
         className,
-        style: { display: 'flex', flexDirection: 'column', gap: '6px' },
+        style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            ...(shouldFlex ? { flex: '1 1 0%', minWidth: 0 } : {}),
+        },
     }, label && React.createElement('label', {
         style: {
             fontSize: '13px',
