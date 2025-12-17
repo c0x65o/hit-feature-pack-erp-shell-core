@@ -554,6 +554,7 @@ interface ShellContentProps {
   onLogout?: () => void;
   initialNotifications: Notification[];
   connectionStatus?: ConnectionStatus;
+  version?: string;
 }
 
 function ShellContent({
@@ -566,6 +567,7 @@ function ShellContent({
   onLogout,
   initialNotifications,
   connectionStatus = 'connected',
+  version,
 }: ShellContentProps) {
   const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
   const { setTheme: setUiKitTheme } = useTheme();
@@ -1166,7 +1168,7 @@ function ShellContent({
                   ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
                 })} />
                 <span>
-                  {connectionStatus === 'connected' ? 'Connected' 
+                  {connectionStatus === 'connected' ? `Connected${version ? ` v${version}` : ''}` 
                     : connectionStatus === 'connecting' ? 'Connecting...'
                     : connectionStatus === 'polling' ? 'Polling'
                     : 'Disconnected'}
@@ -1784,6 +1786,8 @@ interface DashboardShellProps {
   initialNotifications?: Notification[];
   /** WebSocket/real-time connection status for the status indicator */
   connectionStatus?: ConnectionStatus;
+  /** Application version to display next to connection status */
+  version?: string;
 }
 
 export function DashboardShell({
@@ -1796,6 +1800,7 @@ export function DashboardShell({
   onLogout,
   initialNotifications = [],
   connectionStatus = 'connected',
+  version,
 }: DashboardShellProps) {
   const config: ShellConfig = {
     brandName: configProp.brandName || 'HIT',
@@ -1821,6 +1826,7 @@ export function DashboardShell({
         onLogout={onLogout}
         initialNotifications={initialNotifications}
         connectionStatus={connectionStatus}
+        version={version}
       >
         {children}
       </ShellContent>

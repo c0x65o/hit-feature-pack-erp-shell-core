@@ -360,7 +360,7 @@ function NavGroupHeader({ label }) {
             textTransform: 'uppercase',
         }), children: label }));
 }
-function ShellContent({ children, config, navItems, user, activePath, onNavigate, onLogout, initialNotifications, connectionStatus = 'connected', }) {
+function ShellContent({ children, config, navItems, user, activePath, onNavigate, onLogout, initialNotifications, connectionStatus = 'connected', version, }) {
     const { colors, radius, textStyles: ts, spacing, shadows } = useThemeTokens();
     const { setTheme: setUiKitTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -827,7 +827,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                             : colors.error.default,
                                                 borderRadius: radius.full,
                                                 ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
-                                            }) }), _jsx("span", { children: connectionStatus === 'connected' ? 'Connected'
+                                            }) }), _jsx("span", { children: connectionStatus === 'connected' ? `Connected${version ? ` v${version}` : ''}`
                                                 : connectionStatus === 'connecting' ? 'Connecting...'
                                                     : connectionStatus === 'polling' ? 'Polling'
                                                         : 'Disconnected' })] }) })] })), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
@@ -1112,7 +1112,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         opacity: profileStatus.saving ? 0.8 : 1,
                                                     }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] })] }) })] }))] }));
 }
-export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], connectionStatus = 'connected', }) {
+export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], connectionStatus = 'connected', version, }) {
     const config = {
         brandName: configProp.brandName || 'HIT',
         logoUrl: configProp.logoUrl,
@@ -1123,6 +1123,6 @@ export function DashboardShell({ children, config: configProp = {}, navItems = [
         defaultTheme: configProp.defaultTheme || 'system',
     };
     const providerDefaultTheme = config.defaultTheme === 'light' ? 'light' : config.defaultTheme === 'dark' ? 'dark' : 'dark';
-    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, connectionStatus: connectionStatus, children: children }) }));
+    return (_jsx(ThemeProvider, { defaultTheme: providerDefaultTheme, children: _jsx(ShellContent, { config: config, navItems: navItems, user: user, activePath: activePath, onNavigate: onNavigate, onLogout: onLogout, initialNotifications: initialNotifications, connectionStatus: connectionStatus, version: version, children: children }) }));
 }
 export default DashboardShell;

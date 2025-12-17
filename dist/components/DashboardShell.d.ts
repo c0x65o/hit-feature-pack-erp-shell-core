@@ -19,7 +19,9 @@ interface DashboardShellProps {
     initialNotifications?: Notification[];
     /** WebSocket/real-time connection status for the status indicator */
     connectionStatus?: ConnectionStatus;
+    /** Application version to display next to connection status */
+    version?: string;
 }
-export declare function DashboardShell({ children, config: configProp, navItems, user, activePath, onNavigate, onLogout, initialNotifications, connectionStatus, }: DashboardShellProps): import("react/jsx-runtime").JSX.Element;
+export declare function DashboardShell({ children, config: configProp, navItems, user, activePath, onNavigate, onLogout, initialNotifications, connectionStatus, version, }: DashboardShellProps): import("react/jsx-runtime").JSX.Element;
 export default DashboardShell;
 //# sourceMappingURL=DashboardShell.d.ts.map
