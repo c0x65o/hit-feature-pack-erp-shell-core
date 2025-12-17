@@ -23,4 +23,5 @@ export type {
   ShellUser,
   Notification,
   ShellState,
+  ConnectionStatus,
 } from './types';

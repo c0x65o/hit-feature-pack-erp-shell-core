@@ -1,5 +1,5 @@
 import React from 'react';
-import type { NavItem, ShellUser, Notification, ShellConfig } from '../types';
+import type { NavItem, ShellUser, Notification, ShellConfig, ConnectionStatus } from '../types';
 interface ShellContextType {
     menuOpen: boolean;
     setMenuOpen: (open: boolean) => void;
@@ -7,7 +7,6 @@ interface ShellContextType {
     toggleNode: (id: string) => void;
 }
 export declare function useShell(): ShellContextType;
-type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'polling';
 interface DashboardShellProps {
     children: React.ReactNode;
     config?: Partial<ShellConfig>;

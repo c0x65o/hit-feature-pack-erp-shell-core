@@ -544,8 +544,6 @@ function NavGroupHeader({ label }: { label: string }) {
 // SHELL CONTENT (USES THEME)
 // =============================================================================
 
-type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'polling';
-
 interface ShellContentProps {
   children: React.ReactNode;
   config: ShellConfig;

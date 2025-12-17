@@ -9,5 +9,5 @@
 export { DashboardShell, useShell } from './components/DashboardShell';
 export { erpKit } from './kit';
 export { useUi, UiKitProvider } from '@hit/ui-kit';
-export type { NavItem, ShellConfig, ShellUser, Notification, ShellState, } from './types';
+export type { NavItem, ShellConfig, ShellUser, Notification, ShellState, ConnectionStatus, } from './types';
 //# sourceMappingURL=index.d.ts.map
