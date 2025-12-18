@@ -20,7 +20,13 @@ export interface NavItem {
   featureFlag?: string;
   roles?: string[];
   showWhen?: 'authenticated' | 'unauthenticated' | 'always';
-  children?: Omit<NavItem, 'children'>[];
+  /**
+   * Child items (recursive).
+   *
+   * Note: children do not require stable ids at generation time; the shell assigns
+   * deterministic ids at render-time for expansion state.
+   */
+  children?: Omit<NavItem, 'id'>[];
   /** Group this item belongs to (e.g., 'main', 'system') */
   group?: NavGroup;
   /** Sort weight within group (lower = higher in list) */

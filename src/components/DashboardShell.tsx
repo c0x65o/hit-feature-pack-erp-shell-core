@@ -144,6 +144,16 @@ function groupNavItems(items: NavItem[]): { group: string; label: string; items:
 // NAV FILTERING HELPERS
 // =============================================================================
 
+function navHasActiveDescendant(item: NavItem, activePath: string): boolean {
+  const children = item.children as unknown as NavItem[] | undefined;
+  if (!children || children.length === 0) return false;
+  for (const child of children) {
+    if (child.path === activePath) return true;
+    if (navHasActiveDescendant(child, activePath)) return true;
+  }
+  return false;
+}
+
 function filterNavByRoles(
   items: NavItem[], 
   userRoles?: string[]
@@ -193,7 +203,8 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }: NavItemCo
   
   const hasChildren = item.children && item.children.length > 0;
   const isExpanded = expandedNodes.has(item.id);
-  const isActive = activePath === item.path || (hasChildren && item.children?.some(child => child.path === activePath));
+  const hasActiveDescendant = navHasActiveDescendant(item, activePath);
+  const isActive = activePath === item.path || (hasChildren && hasActiveDescendant);
 
   const iconName = item.icon
     ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
@@ -214,7 +225,7 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }: NavItemCo
     }
   };
 
-  const hasActiveChild = hasChildren && item.children?.some(child => child.path === activePath);
+  const hasActiveChild = hasChildren && hasActiveDescendant;
 
   return (
     <div>
@@ -301,8 +312,9 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
   const buttonRef = React.useRef<HTMLButtonElement>(null);
 
   const hasChildren = item.children && item.children.length > 0;
-  const isActive = activePath === item.path || (hasChildren && item.children?.some(child => child.path === activePath));
-  const hasActiveChild = hasChildren && item.children?.some(child => child.path === activePath);
+  const hasActiveDescendant = navHasActiveDescendant(item, activePath);
+  const isActive = activePath === item.path || (hasChildren && hasActiveDescendant);
+  const hasActiveChild = hasChildren && hasActiveDescendant;
 
   const iconName = item.icon
     ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
@@ -346,6 +358,62 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
     } else if (typeof window !== 'undefined') {
       window.location.href = path;
     }
+  };
+
+  const renderFlyoutItems = (nodes: Omit<NavItem, 'id'>[], depth: number = 0): React.ReactNode => {
+    return nodes.map((node, idx) => {
+      const child = node as NavItem;
+      const childIconName = child.icon
+        ? child.icon.charAt(0).toUpperCase() + child.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
+        : '';
+      const ChildIconComponent = child.icon
+        ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[childIconName]
+        : null;
+      const childIsActive = activePath === child.path || navHasActiveDescendant(child, activePath);
+      const childIsHovered = hoveredChildIdx === idx && depth === 0;
+
+      const paddingLeft = depth > 0 ? spacing.lg : spacing.md;
+      const paddingRight = spacing.md;
+
+      return (
+        <React.Fragment key={`flyout-${item.id}-${depth}-${idx}`}>
+          <button
+            onClick={() => child.path && handleChildClick(child.path)}
+            onMouseEnter={() => (depth === 0 ? setHoveredChildIdx(idx) : undefined)}
+            onMouseLeave={() => (depth === 0 ? setHoveredChildIdx(null) : undefined)}
+            disabled={!child.path}
+            style={styles({
+              display: 'flex',
+              alignItems: 'center',
+              gap: spacing.sm,
+              width: '100%',
+              padding: `${spacing.sm} ${paddingRight} ${spacing.sm} ${paddingLeft}`,
+              border: 'none',
+              borderRadius: radius.md,
+              cursor: child.path ? 'pointer' : 'default',
+              textAlign: 'left',
+              transition: 'all 150ms ease',
+              backgroundColor: childIsActive ? colors.primary.default : (childIsHovered ? `${colors.primary.default}18` : 'transparent'),
+              color: childIsActive ? colors.text.inverse : (childIsHovered ? colors.primary.default : colors.text.secondary),
+              fontSize: ts.body.fontSize,
+              fontWeight: childIsHovered ? 500 : 400,
+              opacity: child.path ? 1 : 0.75,
+            })}
+          >
+            {ChildIconComponent && <ChildIconComponent size={16} style={{ flexShrink: 0 }} />}
+            <span style={styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
+              {child.label}
+            </span>
+          </button>
+
+          {child.children && child.children.length > 0 && (
+            <div style={styles({ paddingLeft: spacing.md })}>
+              {renderFlyoutItems(child.children as unknown as Omit<NavItem, 'id'>[], depth + 1)}
+            </div>
+          )}
+        </React.Fragment>
+      );
+    });
   };
 
   // Determine icon button styles - more prominent hover
@@ -433,59 +501,9 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
           {/* Flyout items */}
           <div style={styles({ padding: spacing.sm })}>
             {hasChildren ? (
-              item.children!.map((child, idx) => {
-                const childIconName = child.icon
-                  ? child.icon.charAt(0).toUpperCase() + child.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-                  : '';
-                const ChildIconComponent = child.icon
-                  ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[childIconName]
-                  : null;
-                const childIsActive = activePath === child.path;
-                const childIsHovered = hoveredChildIdx === idx;
-
-                // Determine child button styles - more prominent hover
-                const getChildBgColor = () => {
-                  if (childIsActive) return colors.primary.default;
-                  if (childIsHovered) return `${colors.primary.default}18`;
-                  return 'transparent';
-                };
-
-                const getChildColor = () => {
-                  if (childIsActive) return colors.text.inverse;
-                  if (childIsHovered) return colors.primary.default;
-                  return colors.text.secondary;
-                };
-
-                return (
-                  <button
-                    key={`flyout-${item.id}-${idx}`}
-                    onClick={() => handleChildClick(child.path!)}
-                    onMouseEnter={() => setHoveredChildIdx(idx)}
-                    onMouseLeave={() => setHoveredChildIdx(null)}
-                    style={styles({
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: spacing.sm,
-                      width: '100%',
-                      padding: `${spacing.sm} ${spacing.md}`,
-                      border: 'none',
-                      borderRadius: radius.md,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 150ms ease',
-                      backgroundColor: getChildBgColor(),
-                      color: getChildColor(),
-                      fontSize: ts.body.fontSize,
-                      fontWeight: childIsHovered ? 500 : 400,
-                    })}
-                  >
-                    {ChildIconComponent && <ChildIconComponent size={16} style={{ flexShrink: 0 }} />}
-                    <span style={styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
-                      {child.label}
-                    </span>
-                  </button>
-                );
-              })
+              <div>
+                {renderFlyoutItems(item.children as unknown as Omit<NavItem, 'id'>[])}
+              </div>
             ) : (
               <button
                 onClick={() => handleChildClick(item.path!)}
