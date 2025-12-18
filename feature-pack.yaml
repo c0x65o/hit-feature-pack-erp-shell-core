@@ -2,7 +2,6 @@
 # Provides the dashboard shell (layout, sidebar, topbar, notifications) for HIT apps
 
 name: dashboard-shell
-version: 1.0.0
 description: Dashboard shell with sidebar, topbar, notifications, and theme support
 
 # No routes - this is a layout wrapper, not pages
