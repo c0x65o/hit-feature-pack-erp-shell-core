@@ -3,7 +3,9 @@ import { NextRequest } from 'next/server';
 export interface User {
   sub: string;
   email: string;
+  name?: string;
   roles?: string[];
+  groups?: string[];
 }
 
 /**
@@ -44,7 +46,9 @@ export function extractUserFromRequest(request: NextRequest): User | null {
     return {
       sub: payload.sub || payload.email || '',
       email: payload.email || '',
+      name: payload.name || payload.email || '',
       roles: payload.roles || [],
+      groups: payload.groups || [],
     };
   } catch {
     return null;

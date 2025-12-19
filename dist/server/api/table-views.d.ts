@@ -3,7 +3,10 @@ export declare const dynamic = "force-dynamic";
 export declare const runtime = "nodejs";
 /**
  * GET /api/table-views?tableId=projects
- * List all views for a table (user's custom views + system defaults)
+ * List all views for a table:
+ * - System/default views
+ * - User's custom views
+ * - Views shared with the user (by user, group, or role)
  */
 export declare function GET(request: NextRequest): Promise<NextResponse<{
     data: any[];

@@ -1,15 +1,18 @@
 // API: /api/table-views
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { tableViews, tableViewFilters, } from '@/lib/feature-pack-schemas';
-import { eq, desc, and, inArray } from 'drizzle-orm';
+import { tableViews, tableViewFilters, tableViewShares, } from '@/lib/feature-pack-schemas';
+import { eq, desc, and, inArray, or, sql } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
 // Required for Next.js App Router
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 /**
  * GET /api/table-views?tableId=projects
- * List all views for a table (user's custom views + system defaults)
+ * List all views for a table:
+ * - System/default views
+ * - User's custom views
+ * - Views shared with the user (by user, group, or role)
  */
 export async function GET(request) {
     try {
@@ -35,8 +38,51 @@ export async function GET(request) {
             .from(tableViews)
             .where(and(eq(tableViews.tableId, tableId), eq(tableViews.isSystem, true)))
             .orderBy(desc(tableViews.isDefault), desc(tableViews.createdAt));
+        // Build conditions for views shared with user
+        // Shared with: user directly, or their groups, or their roles
+        const userGroups = user.groups || [];
+        const userRoles = user.roles || [];
+        const shareConditions = [
+            // Direct user share
+            and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, user.sub)),
+        ];
+        // Add group shares if user has groups
+        if (userGroups.length > 0) {
+            shareConditions.push(and(eq(tableViewShares.principalType, 'group'), inArray(tableViewShares.principalId, userGroups)));
+        }
+        // Add role shares if user has roles
+        if (userRoles.length > 0) {
+            shareConditions.push(and(eq(tableViewShares.principalType, 'role'), inArray(tableViewShares.principalId, userRoles)));
+        }
+        // Get views shared with this user (but not owned by them)
+        const sharedViewsData = await db
+            .select({
+            view: tableViews,
+            share: tableViewShares,
+        })
+            .from(tableViewShares)
+            .innerJoin(tableViews, eq(tableViewShares.viewId, tableViews.id))
+            .where(and(eq(tableViews.tableId, tableId), sql `${tableViews.userId} != ${user.sub}`, // Not owned by current user
+        or(...shareConditions)))
+            .orderBy(desc(tableViewShares.createdAt));
+        // Deduplicate shared views (user might have access through multiple paths)
+        const sharedViewsMap = new Map();
+        for (const row of sharedViewsData) {
+            if (!sharedViewsMap.has(row.view.id)) {
+                sharedViewsMap.set(row.view.id, {
+                    view: row.view,
+                    sharedBy: row.share.sharedBy,
+                    sharedByName: row.share.sharedByName,
+                });
+            }
+        }
+        const sharedViews = Array.from(sharedViewsMap.values());
         // Load filters for all views
-        const allViewIds = [...userViews.map((v) => v.id), ...systemViews.map((v) => v.id)];
+        const allViewIds = [
+            ...userViews.map((v) => v.id),
+            ...systemViews.map((v) => v.id),
+            ...sharedViews.map((s) => s.view.id),
+        ];
         const filtersMap = new Map();
         if (allViewIds.length > 0) {
             const filters = await db
@@ -51,15 +97,27 @@ export async function GET(request) {
                 filtersMap.get(filter.viewId).push(filter);
             }
         }
-        // Attach filters to views (system views first, then user's custom views)
+        // Build response with all views categorized
         const viewsWithFilters = [
+            // System views first
             ...systemViews.map((view) => ({
                 ...view,
                 filters: filtersMap.get(view.id) || [],
+                _category: 'system',
             })),
+            // User's own views
             ...userViews.map((view) => ({
                 ...view,
                 filters: filtersMap.get(view.id) || [],
+                _category: 'user',
+            })),
+            // Views shared with user
+            ...sharedViews.map((shared) => ({
+                ...shared.view,
+                filters: filtersMap.get(shared.view.id) || [],
+                _category: 'shared',
+                _sharedBy: shared.sharedBy,
+                _sharedByName: shared.sharedByName,
             })),
         ];
         return NextResponse.json({ data: viewsWithFilters });

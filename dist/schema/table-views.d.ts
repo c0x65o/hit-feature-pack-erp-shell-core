@@ -7,8 +7,14 @@
  * Core entities:
  * - table_views: User-defined views for data tables
  * - table_view_filters: Individual filter conditions within a view
+ * - table_view_shares: ACL entries for shared views (users, groups, roles)
  */
 import { type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
+/**
+ * Principal Types for ACL
+ * Shared enum used across all feature packs (forms, vault, notepad, etc.)
+ */
+export declare const principalTypeEnum: import("drizzle-orm/pg-core").PgEnum<["user", "group", "role"]>;
 /**
  * Table Views Table
  * Stores user-defined views for data tables (e.g., "projects", "crm.companies")
@@ -307,16 +313,118 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
     };
     dialect: "pg";
 }>;
+/**
+ * Table View Shares Table
+ * Stores ACL entries for sharing views with users, groups, or roles.
+ * When a view is shared, the recipients can see it in their "Shared with me" section.
+ */
+export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "table_view_shares";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "table_view_shares";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            enumValues: undefined;
+            baseColumn: never;
+        }, {}, {}>;
+        viewId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "view_id";
+            tableName: "table_view_shares";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+        }, {}, {}>;
+        principalType: import("drizzle-orm/pg-core").PgColumn<{
+            name: "principal_type";
+            tableName: "table_view_shares";
+            dataType: "string";
+            columnType: "PgEnumColumn";
+            data: "group" | "user" | "role";
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            enumValues: ["user", "group", "role"];
+            baseColumn: never;
+        }, {}, {}>;
+        principalId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "principal_id";
+            tableName: "table_view_shares";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+        }, {}, {}>;
+        sharedBy: import("drizzle-orm/pg-core").PgColumn<{
+            name: "shared_by";
+            tableName: "table_view_shares";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+        }, {}, {}>;
+        sharedByName: import("drizzle-orm/pg-core").PgColumn<{
+            name: "shared_by_name";
+            tableName: "table_view_shares";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+        }, {}, {}>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "table_view_shares";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            enumValues: undefined;
+            baseColumn: never;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
 export declare const tableViewsRelations: import("drizzle-orm").Relations<"table_views", {
     filters: import("drizzle-orm").Many<"table_view_filters">;
+    shares: import("drizzle-orm").Many<"table_view_shares">;
 }>;
 export declare const tableViewFiltersRelations: import("drizzle-orm").Relations<"table_view_filters", {
     view: import("drizzle-orm").One<"table_views", true>;
 }>;
+export declare const tableViewSharesRelations: import("drizzle-orm").Relations<"table_view_shares", {
+    view: import("drizzle-orm").One<"table_views", true>;
+}>;
 export type TableView = InferSelectModel<typeof tableViews>;
 export type TableViewFilter = InferSelectModel<typeof tableViewFilters>;
+export type TableViewShare = InferSelectModel<typeof tableViewShares>;
 export type InsertTableView = InferInsertModel<typeof tableViews>;
 export type InsertTableViewFilter = InferInsertModel<typeof tableViewFilters>;
+export type InsertTableViewShare = InferInsertModel<typeof tableViewShares>;
 /**
  * Filter operators supported by the view system
  */

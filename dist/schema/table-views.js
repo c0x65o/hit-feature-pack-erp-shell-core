@@ -7,9 +7,15 @@
  * Core entities:
  * - table_views: User-defined views for data tables
  * - table_view_filters: Individual filter conditions within a view
+ * - table_view_shares: ACL entries for shared views (users, groups, roles)
  */
-import { pgTable, varchar, text, timestamp, uuid, jsonb, index, boolean, integer, } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, uuid, jsonb, index, boolean, integer, unique, pgEnum, } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+/**
+ * Principal Types for ACL
+ * Shared enum used across all feature packs (forms, vault, notepad, etc.)
+ */
+export const principalTypeEnum = pgEnum('principal_type', ['user', 'group', 'role']);
 /**
  * Table Views Table
  * Stores user-defined views for data tables (e.g., "projects", "crm.companies")
@@ -60,15 +66,45 @@ export const tableViewFilters = pgTable('table_view_filters', {
     viewIdIdx: index('table_view_filters_view_id_idx').on(table.viewId),
     fieldIdx: index('table_view_filters_field_idx').on(table.field),
 }));
+/**
+ * Table View Shares Table
+ * Stores ACL entries for sharing views with users, groups, or roles.
+ * When a view is shared, the recipients can see it in their "Shared with me" section.
+ */
+export const tableViewShares = pgTable('table_view_shares', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    viewId: uuid('view_id')
+        .references(() => tableViews.id, { onDelete: 'cascade' })
+        .notNull(),
+    principalType: principalTypeEnum('principal_type').notNull(), // user | group | role
+    principalId: varchar('principal_id', { length: 255 }).notNull(), // User email, group ID, or role name
+    // Who shared the view (for displaying "Shared by X")
+    sharedBy: varchar('shared_by', { length: 255 }).notNull(),
+    sharedByName: varchar('shared_by_name', { length: 255 }), // Display name of sharer (cached)
+    // Timestamps
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+    viewIdx: index('table_view_shares_view_idx').on(table.viewId),
+    principalIdx: index('table_view_shares_principal_idx').on(table.principalType, table.principalId),
+    // One share entry per view+principal combination
+    viewPrincipalIdx: unique('table_view_shares_view_principal_unique').on(table.viewId, table.principalType, table.principalId),
+}));
 // ─────────────────────────────────────────────────────────────────────────────
 // RELATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 export const tableViewsRelations = relations(tableViews, ({ many }) => ({
     filters: many(tableViewFilters),
+    shares: many(tableViewShares),
 }));
 export const tableViewFiltersRelations = relations(tableViewFilters, ({ one }) => ({
     view: one(tableViews, {
         fields: [tableViewFilters.viewId],
+        references: [tableViews.id],
+    }),
+}));
+export const tableViewSharesRelations = relations(tableViewShares, ({ one }) => ({
+    view: one(tableViews, {
+        fields: [tableViewShares.viewId],
         references: [tableViews.id],
     }),
 }));

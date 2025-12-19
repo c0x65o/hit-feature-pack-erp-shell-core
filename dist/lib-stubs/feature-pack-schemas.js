@@ -6,4 +6,4 @@
  * via the generated lib/feature-pack-schemas.ts file.
  */
 // Re-export schema tables from this feature pack
-export { tableViews, tableViewFilters, tableViewsRelations, tableViewFiltersRelations, FILTER_OPERATORS, FILTER_VALUE_TYPES, } from '../schema/table-views';
+export { tableViews, tableViewFilters, tableViewShares, tableViewsRelations, tableViewFiltersRelations, tableViewSharesRelations, principalTypeEnum, FILTER_OPERATORS, FILTER_VALUE_TYPES, } from '../schema/table-views';

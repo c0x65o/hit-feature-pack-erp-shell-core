@@ -13,12 +13,17 @@ schema:
   exports:
     - tableViews
     - tableViewFilters
+    - tableViewShares
     - tableViewsRelations
     - tableViewFiltersRelations
+    - tableViewSharesRelations
+    - principalTypeEnum
     - TableView
     - TableViewFilter
+    - TableViewShare
     - InsertTableView
     - InsertTableViewFilter
+    - InsertTableViewShare
     - FILTER_OPERATORS
     - FILTER_VALUE_TYPES
     - FilterOperator
@@ -41,6 +46,10 @@ api:
       methods: [PATCH]
       handler: "@hit/feature-pack-dashboard-shell/server/api/table-views-use"
       description: "Mark a view as used (update lastUsedAt)"
+    - path: /api/table-views/[id]/shares
+      methods: [GET, POST, DELETE]
+      handler: "@hit/feature-pack-dashboard-shell/server/api/table-views-shares"
+      description: "List, add, or remove share entries for a view"
 
 # No page routes - this is a layout wrapper
 routes: []

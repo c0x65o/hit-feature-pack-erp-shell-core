@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server';
 export interface User {
     sub: string;
     email: string;
+    name?: string;
     roles?: string[];
+    groups?: string[];
 }
 /**
  * Extract user from JWT token in cookies or Authorization header
