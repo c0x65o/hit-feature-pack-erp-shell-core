@@ -81,7 +81,7 @@ export async function POST(request) {
         }
         const db = getDb();
         const body = await request.json();
-        const { tableId, name, description, filters, columnVisibility, sorting, isDefault, isSystem } = body;
+        const { tableId, name, description, filters, columnVisibility, sorting, groupBy, isDefault, isSystem } = body;
         if (!tableId || !name) {
             return NextResponse.json({ error: 'tableId and name are required' }, { status: 400 });
         }
@@ -96,6 +96,7 @@ export async function POST(request) {
             description: description || null,
             columnVisibility: columnVisibility || null,
             sorting: sorting || null,
+            groupBy: groupBy || null,
             isDefault: isDefault || false,
             isSystem: isSystem || false,
             isShared: false,

@@ -125,6 +125,18 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             enumValues: undefined;
             baseColumn: never;
         }, {}, {}>;
+        groupBy: import("drizzle-orm/pg-core").PgColumn<{
+            name: "group_by";
+            tableName: "table_views";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+        }, {}, {}>;
         description: import("drizzle-orm/pg-core").PgColumn<{
             name: "description";
             tableName: "table_views";

@@ -71,7 +71,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const db = getDb();
     const viewId = params.id;
     const body = await request.json();
-    const { name, description, filters, columnVisibility, sorting, isDefault } = body;
+    const { name, description, filters, columnVisibility, sorting, groupBy, isDefault } = body;
 
     // Get view by ID first (not filtering by user)
     const [existingView] = await db
@@ -101,6 +101,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         description: description !== undefined ? description : existingView.description,
         columnVisibility: columnVisibility !== undefined ? columnVisibility : existingView.columnVisibility,
         sorting: sorting !== undefined ? sorting : existingView.sorting,
+        groupBy: groupBy !== undefined ? groupBy : existingView.groupBy,
         isDefault: isDefault !== undefined ? isDefault : existingView.isDefault,
         updatedAt: new Date(),
       })

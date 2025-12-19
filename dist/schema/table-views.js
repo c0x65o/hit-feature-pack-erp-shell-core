@@ -25,6 +25,7 @@ export const tableViews = pgTable('table_views', {
     // View configuration
     columnVisibility: jsonb('column_visibility'), // Record<string, boolean> - which columns are visible
     sorting: jsonb('sorting'), // Array<{ id: string; desc: boolean }> - sort configuration
+    groupBy: jsonb('group_by'), // { field: string; sortOrder?: string[] } - grouping configuration
     // Metadata
     description: text('description'), // Optional description
     metadata: jsonb('metadata'), // Additional metadata (e.g., view category, tags)
