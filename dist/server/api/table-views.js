@@ -139,7 +139,7 @@ export async function POST(request) {
         }
         const db = getDb();
         const body = await request.json();
-        const { tableId, name, description, filters, columnVisibility, sorting, groupBy, isDefault, isSystem } = body;
+        const { tableId, name, description, filters, columnVisibility, sorting, groupBy, isDefault, isSystem, metadata } = body;
         if (!tableId || !name) {
             return NextResponse.json({ error: 'tableId and name are required' }, { status: 400 });
         }
@@ -158,7 +158,7 @@ export async function POST(request) {
             isDefault: isDefault || false,
             isSystem: isSystem || false,
             isShared: false,
-            metadata: null,
+            metadata: metadata && typeof metadata === 'object' ? metadata : null,
         })
             .returning();
         // Create filters if provided

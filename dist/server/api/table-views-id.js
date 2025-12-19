@@ -58,7 +58,7 @@ export async function PUT(request, { params }) {
         const db = getDb();
         const viewId = params.id;
         const body = await request.json();
-        const { name, description, filters, columnVisibility, sorting, groupBy, isDefault } = body;
+        const { name, description, filters, columnVisibility, sorting, groupBy, isDefault, metadata } = body;
         // Get view by ID first (not filtering by user)
         const [existingView] = await db
             .select()
@@ -85,6 +85,7 @@ export async function PUT(request, { params }) {
             sorting: sorting !== undefined ? sorting : existingView.sorting,
             groupBy: groupBy !== undefined ? groupBy : existingView.groupBy,
             isDefault: isDefault !== undefined ? isDefault : existingView.isDefault,
+            metadata: metadata !== undefined ? (metadata && typeof metadata === 'object' ? metadata : null) : existingView.metadata,
             updatedAt: new Date(),
         })
             .where(eq(tableViews.id, viewId))
