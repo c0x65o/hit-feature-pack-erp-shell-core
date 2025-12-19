@@ -602,6 +602,10 @@ function ShellContent({
   // Collapsed rail flyout state - shared across all nav items
   const [openFlyoutId, setOpenFlyoutId] = useState<string | null>(null);
   const flyoutCloseTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Refs for nav scroll position preservation
+  const expandedNavRef = React.useRef<HTMLElement | null>(null);
+  const collapsedNavRef = React.useRef<HTMLElement | null>(null);
 
   const handleFlyoutOpen = useCallback((itemId: string) => {
     // Clear any pending close timeout
@@ -766,6 +770,35 @@ function ShellContent({
       // Note: Nav starts collapsed by default (empty Set) - nodes only expand when user clicks
     }
   }, [themeLoaded, loadInitialTheme]);
+
+  // Restore nav scroll position on mount and save on scroll
+  useEffect(() => {
+    const restoreScroll = () => {
+      if (typeof window === 'undefined') return;
+      const savedScroll = sessionStorage.getItem('dashboard-shell-nav-scroll');
+      if (savedScroll) {
+        const scrollTop = parseInt(savedScroll, 10);
+        // Try both nav refs (expanded or collapsed)
+        if (expandedNavRef.current) {
+          expandedNavRef.current.scrollTop = scrollTop;
+        }
+        if (collapsedNavRef.current) {
+          collapsedNavRef.current.scrollTop = scrollTop;
+        }
+      }
+    };
+    
+    // Restore after a short delay to ensure DOM is ready
+    const timeoutId = setTimeout(restoreScroll, 50);
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Save nav scroll position on scroll
+  const handleNavScroll = useCallback((e: React.UIEvent<HTMLElement>) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('dashboard-shell-nav-scroll', String(e.currentTarget.scrollTop));
+    }
+  }, []);
 
   const toggleNode = useCallback((nodeId: string) => {
     setExpandedNodes((prev) => {
@@ -1047,11 +1080,15 @@ function ShellContent({
             </div>
 
             {/* Rail Navigation Icons with Flyouts */}
-            <nav style={styles({
-              flex: 1,
-              overflowY: 'auto',
-              padding: `${spacing.sm} 0`,
-            })}>
+            <nav 
+              ref={collapsedNavRef}
+              onScroll={handleNavScroll}
+              style={styles({
+                flex: 1,
+                overflowY: 'auto',
+                padding: `${spacing.sm} 0`,
+              })}
+            >
               {allFlatNavItems.map((item) => (
                 <CollapsedNavItem
                   key={item.id}
@@ -1146,12 +1183,16 @@ function ShellContent({
             </div>
 
             {/* Navigation */}
-            <nav style={styles({
-              flex: 1,
-              overflowY: 'auto',
-              padding: `${spacing.sm} ${spacing.md}`,
-              minWidth: EXPANDED_SIDEBAR_WIDTH,
-            })}>
+            <nav 
+              ref={expandedNavRef}
+              onScroll={handleNavScroll}
+              style={styles({
+                flex: 1,
+                overflowY: 'auto',
+                padding: `${spacing.sm} ${spacing.md}`,
+                minWidth: EXPANDED_SIDEBAR_WIDTH,
+              })}
+            >
               {groupedNavItems.map((group) => (
                 <div key={group.group}>
                   <NavGroupHeader label={group.label} />

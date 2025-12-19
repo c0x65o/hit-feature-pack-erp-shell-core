@@ -380,6 +380,9 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     // Collapsed rail flyout state - shared across all nav items
     const [openFlyoutId, setOpenFlyoutId] = useState(null);
     const flyoutCloseTimeoutRef = React.useRef(null);
+    // Refs for nav scroll position preservation
+    const expandedNavRef = React.useRef(null);
+    const collapsedNavRef = React.useRef(null);
     const handleFlyoutOpen = useCallback((itemId) => {
         // Clear any pending close timeout
         if (flyoutCloseTimeoutRef.current) {
@@ -529,6 +532,33 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             // Note: Nav starts collapsed by default (empty Set) - nodes only expand when user clicks
         }
     }, [themeLoaded, loadInitialTheme]);
+    // Restore nav scroll position on mount and save on scroll
+    useEffect(() => {
+        const restoreScroll = () => {
+            if (typeof window === 'undefined')
+                return;
+            const savedScroll = sessionStorage.getItem('dashboard-shell-nav-scroll');
+            if (savedScroll) {
+                const scrollTop = parseInt(savedScroll, 10);
+                // Try both nav refs (expanded or collapsed)
+                if (expandedNavRef.current) {
+                    expandedNavRef.current.scrollTop = scrollTop;
+                }
+                if (collapsedNavRef.current) {
+                    collapsedNavRef.current.scrollTop = scrollTop;
+                }
+            }
+        };
+        // Restore after a short delay to ensure DOM is ready
+        const timeoutId = setTimeout(restoreScroll, 50);
+        return () => clearTimeout(timeoutId);
+    }, []);
+    // Save nav scroll position on scroll
+    const handleNavScroll = useCallback((e) => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('dashboard-shell-nav-scroll', String(e.currentTarget.scrollTop));
+        }
+    }, []);
     const toggleNode = useCallback((nodeId) => {
         setExpandedNodes((prev) => {
             const next = new Set(prev);
@@ -764,7 +794,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                         overflow: 'hidden',
                                         cursor: 'pointer',
                                         transition: 'transform 150ms ease',
-                                    }), title: `Expand ${config.brandName} navigation`, children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '24px', height: '24px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.heading3.fontSize }), children: config.brandName.charAt(0) })) }) }), _jsx("nav", { style: styles({
+                                    }), title: `Expand ${config.brandName} navigation`, children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '24px', height: '24px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.heading3.fontSize }), children: config.brandName.charAt(0) })) }) }), _jsx("nav", { ref: collapsedNavRef, onScroll: handleNavScroll, style: styles({
                                     flex: 1,
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} 0`,
@@ -814,7 +844,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     overflow: 'hidden',
-                                                }), children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '20px', height: '20px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.body.fontSize }), children: config.brandName.charAt(0) })) }), _jsx("span", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary }), children: config.brandName })] }), _jsx("button", { onClick: () => setMenuOpen(false), style: { ...iconButtonStyle, width: '36px', height: '36px' }, children: _jsx(Menu, { size: 20 }) })] }), _jsx("nav", { style: styles({
+                                                }), children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '20px', height: '20px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.body.fontSize }), children: config.brandName.charAt(0) })) }), _jsx("span", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary }), children: config.brandName })] }), _jsx("button", { onClick: () => setMenuOpen(false), style: { ...iconButtonStyle, width: '36px', height: '36px' }, children: _jsx(Menu, { size: 20 }) })] }), _jsx("nav", { ref: expandedNavRef, onScroll: handleNavScroll, style: styles({
                                     flex: 1,
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} ${spacing.md}`,
