@@ -1035,6 +1035,8 @@ export function Dashboards() {
         }
         .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
         .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        /* UI kit Input/Select include a default margin-bottom for form layouts; remove it in the topbar controls row */
+        .controls > * { margin-bottom: 0 !important; }
         .subtitle { font-size: 12px; opacity: 0.75; margin-top: -6px; }
         .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
         .span-12 { grid-column: span 12; }
