@@ -5,11 +5,81 @@ import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
 import * as LucideIcons from 'lucide-react';
+import * as SimpleIcons from 'react-icons/si';
 function resolveLucideIcon(name) {
     if (!name)
         return null;
     const Comp = LucideIcons[name];
     return Comp || null;
+}
+function toPascal(s) {
+    return String(s || '')
+        .replace(/[_\-\s]+/g, ' ')
+        .trim()
+        .split(' ')
+        .filter(Boolean)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join('');
+}
+function resolvePlatformIcon(name) {
+    if (!name)
+        return null;
+    const raw = String(name || '').trim();
+    if (!raw)
+        return null;
+    // Supported formats:
+    // - "si:discord" (SimpleIcons via react-icons/si)
+    // - "brand:discord" (alias to SimpleIcons)
+    // - "lucide:Users" (force lucide)
+    // - "Discord" (lucide default behavior)
+    const [nsMaybe, valMaybe] = raw.includes(':') ? raw.split(':', 2) : [null, raw];
+    const ns = (nsMaybe || '').toLowerCase();
+    const val = String(valMaybe || '').trim();
+    if (!val)
+        return null;
+    const tryLucide = (n) => resolveLucideIcon(n);
+    const trySimple = (key) => {
+        const pas = toPascal(key);
+        const candidates = [
+            `Si${pas}`,
+            // common exceptions / alternates
+            key.toLowerCase() === 'x' ? 'SiX' : '',
+            key.toLowerCase() === 'twitter' ? 'SiX' : '',
+            key.toLowerCase() === 'xcom' ? 'SiX' : '',
+            key.toLowerCase() === 'x-dot-org' ? 'SiXdotorg' : '',
+        ].filter(Boolean);
+        for (const cand of candidates) {
+            const Comp = SimpleIcons[cand];
+            if (Comp)
+                return Comp;
+        }
+        return null;
+    };
+    if (ns === 'lucide')
+        return tryLucide(val);
+    if (ns === 'si' || ns === 'simpleicons')
+        return trySimple(val);
+    if (ns === 'brand' || ns === 'platform') {
+        const alias = val.toLowerCase();
+        const m = {
+            discord: 'discord',
+            steam: 'steam',
+            tiktok: 'tiktok',
+            facebook: 'facebook',
+            instagram: 'instagram',
+            youtube: 'youtube',
+            twitch: 'twitch',
+            reddit: 'reddit',
+            linkedin: 'linkedin',
+            spotify: 'spotify',
+            x: 'x',
+            twitter: 'x',
+        };
+        return trySimple(m[alias] || alias);
+    }
+    // Default behavior: keep existing lucide names working,
+    // but also allow passing "si:..." if you want guaranteed brand icons.
+    return tryLucide(val) || trySimple(val);
 }
 function selectValue(v) {
     return typeof v === 'string' ? v : String(v?.target?.value ?? '');
@@ -963,8 +1033,9 @@ export function Dashboards() {
           flex-direction: column;
           gap: 16px;
         }
-        .topbar { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+        .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
         .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .subtitle { font-size: 12px; opacity: 0.75; margin-top: -6px; }
         .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
         .span-12 { grid-column: span 12; }
         .span-6 { grid-column: span 6; }
@@ -1020,7 +1091,7 @@ export function Dashboards() {
         .chart-svg { width: 100%; height: 240px; }
         .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .legend-pill { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(148,163,184,0.14); background: rgba(148,163,184,0.08); font-size: 12px; }
-      ` }), _jsxs("div", { className: "wrap", children: [_jsxs("div", { className: "topbar", children: [_jsxs("div", { style: { minWidth: 260 }, children: [_jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("strong", { children: definition?.name || 'Dashboard' }), pack ? _jsxs(Badge, { variant: "info", children: ["pack: ", pack] }) : _jsx(Badge, { variant: "info", children: "global" }), definition?.visibility ? _jsx(Badge, { variant: "default", children: definition.visibility }) : null] }), _jsx("div", { style: { fontSize: 12, opacity: 0.75, marginTop: 4 }, children: definition?.description || '—' })] }), _jsxs("div", { className: "controls", children: [_jsx(Dropdown, { align: "right", trigger: _jsx(Button, { variant: "secondary", children: "Switch" }), items: list.map((d) => ({
+      ` }), _jsxs("div", { className: "wrap", children: [_jsxs("div", { className: "topbar", children: [_jsx("div", { style: { minWidth: 260 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("strong", { children: definition?.name || 'Dashboard' }), pack ? _jsxs(Badge, { variant: "info", children: ["pack: ", pack] }) : _jsx(Badge, { variant: "info", children: "global" }), definition?.visibility ? _jsx(Badge, { variant: "default", children: definition.visibility }) : null] }) }), _jsxs("div", { className: "controls", children: [_jsx(Dropdown, { align: "right", trigger: _jsx(Button, { variant: "secondary", children: "Switch" }), items: list.map((d) => ({
                                             label: d.key === selectedKey ? `${d.name} (current)` : d.name,
                                             disabled: d.key === selectedKey,
                                             onClick: () => setSelectedKey(d.key),
@@ -1031,7 +1102,7 @@ export function Dashboards() {
                                             { value: 'month_to_date', label: 'Month to date' },
                                             { value: 'year_to_date', label: 'Year to date' },
                                             { value: 'custom', label: 'Custom' },
-                                        ] }), preset === 'custom' ? (_jsxs(_Fragment, { children: [_jsx(Input, { type: "date", value: customStart, onChange: (e) => setCustomStart(e.target.value) }), _jsx(Input, { type: "date", value: customEnd, onChange: (e) => setCustomEnd(e.target.value) })] })) : null, _jsx(Button, { onClick: () => queryMetrics(), disabled: loadingDash, children: "Refresh" }), _jsx(Button, { variant: "secondary", onClick: openShares, disabled: !definition, children: "Share" })] })] }), error ? _jsx("div", { style: { color: '#ef4444', fontSize: 13 }, children: error }) : null, _jsx(Card, { children: loadingList ? (_jsx("div", { style: { padding: 14 }, children: _jsx(Spinner, {}) })) : (_jsxs("div", { style: { padding: 14, fontSize: 12, opacity: 0.75 }, children: [list.length, " dashboards available"] })) }), _jsxs("div", { className: "grid", children: [loadingDash ? (_jsx("div", { className: "span-12", children: _jsx(Card, { children: _jsx("div", { style: { padding: 18 }, children: _jsx(Spinner, {}) }) }) })) : null, !loadingDash && definition ? (widgetList.map((w) => {
+                                        ] }), preset === 'custom' ? (_jsxs(_Fragment, { children: [_jsx(Input, { type: "date", value: customStart, onChange: (e) => setCustomStart(e.target.value) }), _jsx(Input, { type: "date", value: customEnd, onChange: (e) => setCustomEnd(e.target.value) })] })) : null, _jsx(Button, { onClick: () => queryMetrics(), disabled: loadingDash, children: "Refresh" }), _jsx(Button, { variant: "secondary", onClick: openShares, disabled: !definition, children: "Share" })] })] }), _jsx("div", { className: "subtitle", children: definition?.description || '—' }), error ? _jsx("div", { style: { color: '#ef4444', fontSize: 13 }, children: error }) : null, _jsxs("div", { className: "grid", children: [loadingDash ? (_jsx("div", { className: "span-12", children: _jsx(Card, { children: _jsx("div", { style: { padding: 18 }, children: _jsx(Spinner, {}) }) }) })) : null, !loadingDash && definition ? (widgetList.map((w) => {
                                 const grid = w.grid || {};
                                 const span = typeof grid.w === 'number' ? grid.w : (w.kind === 'kpi' ? 3 : w.kind === 'pie' ? 6 : 12);
                                 const spanClass = span === 12 ? 'span-12' : span === 6 ? 'span-6' : span === 4 ? 'span-4' : 'span-3';
@@ -1059,7 +1130,7 @@ export function Dashboards() {
                                                         const val = Number(st?.totalsByMetricKey?.[mk] ?? 0);
                                                         const format = (it.unit === 'usd') ? 'usd' : 'number';
                                                         const iconName = String(it.icon || fallbackIconForMetric(it.category) || '');
-                                                        const Icon = resolveLucideIcon(iconName);
+                                                        const Icon = resolvePlatformIcon(iconName);
                                                         const iconColor = String(it.icon_color || colors.accent.default);
                                                         return (_jsxs("div", { className: "kpi-mini", style: {
                                                                 border: `1px solid ${colors.border.subtle}`,
@@ -1082,7 +1153,7 @@ export function Dashboards() {
                                     if (prev !== null && prev > 0)
                                         pct = ((val - prev) / prev) * 100;
                                     const iconName = String(w?.presentation?.icon || cat?.icon || '');
-                                    const Icon = resolveLucideIcon(iconName);
+                                    const Icon = resolvePlatformIcon(iconName);
                                     const iconColor = String(w?.presentation?.iconColor || cat?.icon_color || colors.accent.default);
                                     const action = w?.presentation?.action;
                                     return (_jsx("div", { className: spanClass, children: _jsx(Card, { children: _jsxs("div", { className: "kpi", children: [_jsxs("div", { className: "kpi-head", children: [_jsxs("div", { children: [_jsx("div", { className: "kpi-title", children: w.title || cat?.label || metricKey }), _jsx("div", { className: "kpi-val", children: st?.loading ? '—' : formatNumber(val, fmt) })] }), Icon ? (_jsx("div", { className: "kpi-icon", style: {

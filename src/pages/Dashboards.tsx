@@ -5,11 +5,84 @@ import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
 import * as LucideIcons from 'lucide-react';
+import * as SimpleIcons from 'react-icons/si';
 
 function resolveLucideIcon(name?: string) {
   if (!name) return null;
   const Comp = (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[name];
   return Comp || null;
+}
+
+type IconComp = React.ComponentType<{ size?: number; style?: React.CSSProperties; color?: string }>;
+
+function toPascal(s: string) {
+  return String(s || '')
+    .replace(/[_\-\s]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join('');
+}
+
+function resolvePlatformIcon(name?: string): IconComp | null {
+  if (!name) return null;
+  const raw = String(name || '').trim();
+  if (!raw) return null;
+
+  // Supported formats:
+  // - "si:discord" (SimpleIcons via react-icons/si)
+  // - "brand:discord" (alias to SimpleIcons)
+  // - "lucide:Users" (force lucide)
+  // - "Discord" (lucide default behavior)
+  const [nsMaybe, valMaybe] = raw.includes(':') ? raw.split(':', 2) : [null, raw];
+  const ns = (nsMaybe || '').toLowerCase();
+  const val = String(valMaybe || '').trim();
+  if (!val) return null;
+
+  const tryLucide = (n: string) => resolveLucideIcon(n) as unknown as IconComp | null;
+
+  const trySimple = (key: string) => {
+    const pas = toPascal(key);
+    const candidates = [
+      `Si${pas}`,
+      // common exceptions / alternates
+      key.toLowerCase() === 'x' ? 'SiX' : '',
+      key.toLowerCase() === 'twitter' ? 'SiX' : '',
+      key.toLowerCase() === 'xcom' ? 'SiX' : '',
+      key.toLowerCase() === 'x-dot-org' ? 'SiXdotorg' : '',
+    ].filter(Boolean);
+    for (const cand of candidates) {
+      const Comp = (SimpleIcons as unknown as Record<string, IconComp>)[cand];
+      if (Comp) return Comp;
+    }
+    return null;
+  };
+
+  if (ns === 'lucide') return tryLucide(val);
+  if (ns === 'si' || ns === 'simpleicons') return trySimple(val);
+  if (ns === 'brand' || ns === 'platform') {
+    const alias = val.toLowerCase();
+    const m: Record<string, string> = {
+      discord: 'discord',
+      steam: 'steam',
+      tiktok: 'tiktok',
+      facebook: 'facebook',
+      instagram: 'instagram',
+      youtube: 'youtube',
+      twitch: 'twitch',
+      reddit: 'reddit',
+      linkedin: 'linkedin',
+      spotify: 'spotify',
+      x: 'x',
+      twitter: 'x',
+    };
+    return trySimple(m[alias] || alias);
+  }
+
+  // Default behavior: keep existing lucide names working,
+  // but also allow passing "si:..." if you want guaranteed brand icons.
+  return tryLucide(val) || trySimple(val);
 }
 
 type DashboardListItem = {
@@ -1196,8 +1269,9 @@ export function Dashboards() {
           flex-direction: column;
           gap: 16px;
         }
-        .topbar { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+        .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
         .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .subtitle { font-size: 12px; opacity: 0.75; margin-top: -6px; }
         .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
         .span-12 { grid-column: span 12; }
         .span-6 { grid-column: span 6; }
@@ -1263,7 +1337,6 @@ export function Dashboards() {
               {pack ? <Badge variant="info">pack: {pack}</Badge> : <Badge variant="info">global</Badge>}
               {definition?.visibility ? <Badge variant="default">{definition.visibility}</Badge> : null}
             </div>
-            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{definition?.description || '—'}</div>
           </div>
 
           <div className="controls">
@@ -1305,18 +1378,9 @@ export function Dashboards() {
             </Button>
           </div>
         </div>
+        <div className="subtitle">{definition?.description || '—'}</div>
 
         {error ? <div style={{ color: '#ef4444', fontSize: 13 }}>{error}</div> : null}
-
-        <Card>
-          {loadingList ? (
-            <div style={{ padding: 14 }}><Spinner /></div>
-          ) : (
-            <div style={{ padding: 14, fontSize: 12, opacity: 0.75 }}>
-              {list.length} dashboards available
-            </div>
-          )}
-        </Card>
 
         <div className="grid">
           {loadingDash ? (
@@ -1364,7 +1428,7 @@ export function Dashboards() {
                               const val = Number(st?.totalsByMetricKey?.[mk] ?? 0);
                               const format = (it.unit === 'usd') ? 'usd' : 'number';
                               const iconName = String(it.icon || fallbackIconForMetric(it.category) || '');
-                              const Icon = resolveLucideIcon(iconName);
+                              const Icon = resolvePlatformIcon(iconName);
                               const iconColor = String(it.icon_color || colors.accent.default);
                               return (
                                 <div
@@ -1420,7 +1484,7 @@ export function Dashboards() {
                 if (prev !== null && prev > 0) pct = ((val - prev) / prev) * 100;
 
                 const iconName = String(w?.presentation?.icon || cat?.icon || '');
-                const Icon = resolveLucideIcon(iconName);
+                const Icon = resolvePlatformIcon(iconName);
                 const iconColor = String(w?.presentation?.iconColor || cat?.icon_color || colors.accent.default);
                 const action = w?.presentation?.action;
 
