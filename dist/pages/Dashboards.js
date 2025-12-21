@@ -256,6 +256,7 @@ export function Dashboards() {
     const [sharesLoading, setSharesLoading] = React.useState(false);
     const [sharesError, setSharesError] = React.useState(null);
     const [kpiValues, setKpiValues] = React.useState({});
+    const [kpiCatalogTotals, setKpiCatalogTotals] = React.useState({});
     const [pieRows, setPieRows] = React.useState({});
     const [lineSeries, setLineSeries] = React.useState({});
     const [lineBucketByWidgetKey, setLineBucketByWidgetKey] = React.useState({});
@@ -276,30 +277,79 @@ export function Dashboards() {
     }, [preset, customStart, customEnd]);
     const loadCatalog = React.useCallback(async () => {
         try {
-            const res = await fetch('/api/metrics/catalog');
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok)
-                return;
-            const items = Array.isArray(json.items) ? json.items : Array.isArray(json.data) ? json.data : [];
-            const map = {};
-            for (const it of items) {
-                const key = typeof it?.key === 'string' ? it.key : '';
-                if (!key)
-                    continue;
-                map[key] = {
-                    key,
-                    label: typeof it?.label === 'string' ? it.label : key,
-                    unit: typeof it?.unit === 'string' ? it.unit : 'count',
-                    icon: typeof it?.icon === 'string' ? it.icon : undefined,
-                    icon_color: typeof it?.icon_color === 'string' ? it.icon_color : undefined,
-                };
-            }
-            setCatalogByKey(map);
+            const map = await fetchCatalogMap();
+            if (Object.keys(map).length)
+                setCatalogByKey(map);
         }
         catch {
             // ignore
         }
     }, []);
+    function buildCatalogMap(items) {
+        const map = {};
+        for (const it of items) {
+            const key = typeof it?.key === 'string' ? it.key : '';
+            if (!key)
+                continue;
+            map[key] = {
+                key,
+                label: typeof it?.label === 'string' ? it.label : key,
+                unit: typeof it?.unit === 'string' ? it.unit : 'count',
+                icon: typeof it?.icon === 'string' ? it.icon : undefined,
+                icon_color: typeof it?.icon_color === 'string' ? it.icon_color : undefined,
+                category: typeof it?.category === 'string' ? it.category : undefined,
+                rollup_strategy: typeof it?.rollup_strategy === 'string' ? it.rollup_strategy : undefined,
+                time_kind: it?.time_kind === 'realtime' || it?.time_kind === 'none' || it?.time_kind === 'timeseries'
+                    ? it.time_kind
+                    : undefined,
+                owner: it?.owner &&
+                    typeof it.owner === 'object' &&
+                    typeof it.owner.kind === 'string' &&
+                    typeof it.owner.id === 'string'
+                    ? it.owner
+                    : undefined,
+                entity_kinds: Array.isArray(it?.entity_kinds)
+                    ? it.entity_kinds.filter((x) => typeof x === 'string')
+                    : undefined,
+                pointsCount: typeof it?.pointsCount === 'number' ? it.pointsCount : undefined,
+            };
+        }
+        return map;
+    }
+    async function fetchCatalogMap() {
+        const res = await fetch('/api/metrics/catalog');
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok)
+            return {};
+        const items = Array.isArray(json.items) ? json.items : Array.isArray(json.data) ? json.data : [];
+        return buildCatalogMap(items);
+    }
+    function pMapLimit(items, limit, fn) {
+        const lim = Math.max(1, Math.min(25, Number(limit || 0) || 8));
+        let i = 0;
+        const out = new Array(items.length);
+        const workers = new Array(Math.min(lim, items.length)).fill(0).map(async () => {
+            while (true) {
+                const idx = i++;
+                if (idx >= items.length)
+                    break;
+                out[idx] = await fn(items[idx], idx);
+            }
+        });
+        return Promise.all(workers).then(() => out);
+    }
+    function fallbackIconForMetric(cat) {
+        const c = String(cat || '').toLowerCase();
+        if (c.includes('revenue') || c.includes('sales'))
+            return 'DollarSign';
+        if (c.includes('marketing') || c.includes('followers') || c.includes('wishlist'))
+            return 'Megaphone';
+        if (c.includes('user') || c.includes('customer'))
+            return 'Users';
+        if (c.includes('project') || c.includes('game'))
+            return 'Gamepad2';
+        return 'BarChart3';
+    }
     const loadList = React.useCallback(async () => {
         try {
             setLoadingList(true);
@@ -414,6 +464,73 @@ export function Dashboards() {
             return;
         const def = definition.definition;
         const widgets = Array.isArray(def.widgets) ? def.widgets : [];
+        // KPI Catalog (auto-generated KPI tiles from metrics catalog)
+        const kpiCatalogs = widgets.filter((w) => w?.kind === 'kpi_catalog');
+        if (kpiCatalogs.length) {
+            setKpiCatalogTotals((prev) => {
+                const next = { ...prev };
+                for (const w of kpiCatalogs)
+                    next[w.key] = { loading: true, totalsByMetricKey: prev[w.key]?.totalsByMetricKey || {} };
+                return next;
+            });
+            await Promise.all(kpiCatalogs.map(async (w) => {
+                try {
+                    // Fetch a local snapshot of the catalog so we can compute immediately (avoid setState timing).
+                    const catalogMap = Object.keys(catalogByKey || {}).length ? catalogByKey : await fetchCatalogMap();
+                    if (!Object.keys(catalogByKey || {}).length && Object.keys(catalogMap).length)
+                        setCatalogByKey(catalogMap);
+                    const pres = w?.presentation || {};
+                    const entityKind = typeof pres?.entityKind === 'string' ? pres.entityKind : 'project';
+                    const onlyWithPoints = pres?.onlyWithPoints === true;
+                    const items = Object.values(catalogMap || {});
+                    const filtered = items
+                        .filter((it) => {
+                        const kinds = Array.isArray(it.entity_kinds) ? it.entity_kinds : [];
+                        if (kinds.length && !kinds.includes(entityKind))
+                            return false;
+                        if (onlyWithPoints && Number(it.pointsCount || 0) <= 0)
+                            return false;
+                        return true;
+                    })
+                        .sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key)));
+                    const t = effectiveTime(w);
+                    const totalsByMetricKey = {};
+                    await pMapLimit(filtered, 10, async (it) => {
+                        const mk = String(it.key || '').trim();
+                        if (!mk)
+                            return;
+                        // Decide aggregation: sum-series metrics => sum; last/realtime => sum of last per entity.
+                        const roll = String(it.rollup_strategy || '').toLowerCase();
+                        const timeKind = String(it.time_kind || '').toLowerCase();
+                        const agg = (roll === 'last' || timeKind === 'realtime' || timeKind === 'none') ? 'last' : 'sum';
+                        const body = {
+                            metricKey: mk,
+                            bucket: 'none',
+                            agg,
+                            entityKind,
+                            groupByEntityId: true,
+                        };
+                        if (t)
+                            Object.assign(body, t);
+                        const res = await fetch('/api/metrics/query', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body),
+                        });
+                        const json = await res.json().catch(() => ({}));
+                        if (!res.ok)
+                            throw new Error(json?.error || `metrics/query ${res.status}`);
+                        const rows = Array.isArray(json.data) ? json.data : [];
+                        const sum = rows.reduce((acc, r) => acc + Number(r.value ?? 0), 0);
+                        totalsByMetricKey[mk] = Number.isFinite(sum) ? sum : 0;
+                    });
+                    setKpiCatalogTotals((p) => ({ ...p, [w.key]: { loading: false, totalsByMetricKey } }));
+                }
+                catch {
+                    setKpiCatalogTotals((p) => ({ ...p, [w.key]: { loading: false, totalsByMetricKey: {} } }));
+                }
+            }));
+        }
         // KPIs
         const kpis = widgets.filter((w) => w?.kind === 'kpi');
         setKpiValues((prev) => {
@@ -435,6 +552,21 @@ export function Dashboards() {
                     const json = await res.json().catch(() => ({}));
                     const total = Number(getByPath(json, totalField) ?? 0);
                     setKpiValues((p) => ({ ...p, [w.key]: { loading: false, value: Number.isFinite(total) ? total : 0 } }));
+                    return;
+                }
+                // Generic non-metrics value source (extract a single numeric field from an endpoint).
+                if (valueSource?.kind === 'api_value') {
+                    const endpoint = typeof valueSource?.endpoint === 'string' ? valueSource.endpoint : '';
+                    const valueField = typeof valueSource?.valueField === 'string' ? valueSource.valueField : '';
+                    if (!endpoint || !valueField) {
+                        setKpiValues((p) => ({ ...p, [w.key]: { loading: false, value: 0 } }));
+                        return;
+                    }
+                    const res = await fetch(endpoint);
+                    const json = await res.json().catch(() => ({}));
+                    const raw = getByPath(json, valueField);
+                    const v = Number(raw ?? 0);
+                    setKpiValues((p) => ({ ...p, [w.key]: { loading: false, value: Number.isFinite(v) ? v : 0 } }));
                     return;
                 }
                 // Sum the latest value per entity (useful for totals like wishlist_cumulative_total across projects).
@@ -865,6 +997,18 @@ export function Dashboards() {
           margin-top: 4px;
         }
         .kpi-action:hover { color: var(--hit-foreground); text-decoration: underline; }
+        .kpi-catalog-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+        }
+        @media (max-width: 1100px) { .kpi-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 700px) { .kpi-catalog-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); } }
+        .kpi-mini { padding: 12px; display: flex; flex-direction: column; gap: 8px; border-radius: 12px; }
+        .kpi-mini-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .kpi-mini-title { font-size: 12px; opacity: 0.82; line-height: 1.2; }
+        .kpi-mini-val { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+        .kpi-mini-badges { display: flex; gap: 6px; flex-wrap: wrap; }
         .donut-wrap { display: grid; grid-template-columns: 260px 1fr; gap: 14px; align-items: center; }
         @media (max-width: 900px) { .donut-wrap { grid-template-columns: 1fr; } }
         .donut { width: 100%; height: 240px; }
@@ -894,6 +1038,42 @@ export function Dashboards() {
                                 const metricKey = String(w?.query?.metricKey || w?.series?.[0]?.query?.metricKey || w?.seriesSpec?.metricKey || '');
                                 const cat = metricKey ? catalogByKey[metricKey] : undefined;
                                 const fmt = (w?.presentation?.format === 'usd' || cat?.unit === 'usd') ? 'usd' : 'number';
+                                if (w.kind === 'kpi_catalog') {
+                                    const st = kpiCatalogTotals[w.key];
+                                    const pres = w?.presentation || {};
+                                    const entityKind = typeof pres?.entityKind === 'string' ? pres.entityKind : 'project';
+                                    const onlyWithPoints = pres?.onlyWithPoints === true;
+                                    const items = Object.values(catalogByKey || {});
+                                    const filtered = items
+                                        .filter((it) => {
+                                        const kinds = Array.isArray(it.entity_kinds) ? it.entity_kinds : [];
+                                        if (kinds.length && !kinds.includes(entityKind))
+                                            return false;
+                                        if (onlyWithPoints && Number(it.pointsCount || 0) <= 0)
+                                            return false;
+                                        return true;
+                                    })
+                                        .sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key)));
+                                    return (_jsx("div", { className: "span-12", children: _jsx(Card, { title: w.title || 'KPIs', children: _jsx("div", { style: { padding: 14 }, children: st?.loading ? (_jsx(Spinner, {})) : (_jsx("div", { className: "kpi-catalog-grid", children: filtered.map((it) => {
+                                                        const mk = it.key;
+                                                        const val = Number(st?.totalsByMetricKey?.[mk] ?? 0);
+                                                        const format = (it.unit === 'usd') ? 'usd' : 'number';
+                                                        const iconName = String(it.icon || fallbackIconForMetric(it.category) || '');
+                                                        const Icon = resolveLucideIcon(iconName);
+                                                        const iconColor = String(it.icon_color || colors.accent.default);
+                                                        return (_jsxs("div", { className: "kpi-mini", style: {
+                                                                border: `1px solid ${colors.border.subtle}`,
+                                                                background: colors.bg.surface,
+                                                            }, children: [_jsxs("div", { className: "kpi-mini-top", children: [_jsxs("div", { style: { minWidth: 0 }, children: [_jsx("div", { className: "kpi-mini-title", title: mk, children: it.label || mk }), _jsx("div", { className: "kpi-mini-val", children: formatNumber(val, format) })] }), Icon ? (_jsx("div", { className: "kpi-icon", style: {
+                                                                                width: 34,
+                                                                                height: 34,
+                                                                                borderRadius: radius.lg,
+                                                                                border: `1px solid ${colors.border.subtle}`,
+                                                                                background: colors.bg.muted,
+                                                                                color: iconColor,
+                                                                            }, children: _jsx(Icon, { size: 18, style: { color: iconColor } }) })) : null] }), _jsxs("div", { className: "kpi-mini-badges", children: [it.category ? _jsx(Badge, { children: it.category }) : null, it.unit ? _jsx(Badge, { children: it.unit }) : null, _jsx(Badge, { children: String(it.rollup_strategy || (it.time_kind === 'realtime' ? 'last' : 'sum')) })] })] }, mk));
+                                                    }) })) }) }) }, w.key));
+                                }
                                 if (w.kind === 'kpi') {
                                     const st = kpiValues[w.key];
                                     const val = Number(st?.value ?? 0);
