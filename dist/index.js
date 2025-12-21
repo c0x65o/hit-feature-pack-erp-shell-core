@@ -16,3 +16,5 @@ export { erpKit } from './kit';
 export { useUi, UiKitProvider } from '@hit/ui-kit';
 // Table Views schema
 export { tableViews, tableViewFilters, tableViewsRelations, tableViewFiltersRelations, FILTER_OPERATORS, FILTER_VALUE_TYPES, } from './schema/table-views';
+// Dashboard Definitions schema
+export { dashboardDefinitions, dashboardDefinitionShares, dashboardDefinitionsRelations, dashboardDefinitionSharesRelations, } from './schema/table-views';

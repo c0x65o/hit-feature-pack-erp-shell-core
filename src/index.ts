@@ -34,6 +34,18 @@ export {
   type FilterValueType,
 } from './schema/table-views';
 
+// Dashboard Definitions schema
+export {
+  dashboardDefinitions,
+  dashboardDefinitionShares,
+  dashboardDefinitionsRelations,
+  dashboardDefinitionSharesRelations,
+  type DashboardDefinition,
+  type DashboardDefinitionShare,
+  type InsertDashboardDefinition,
+  type InsertDashboardDefinitionShare,
+} from './schema/table-views';
+
 // Types
 export type {
   NavItem,
