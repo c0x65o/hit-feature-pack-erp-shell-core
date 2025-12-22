@@ -696,9 +696,12 @@ export function Dashboards() {
                 if (valueSource?.kind === 'api_count' || isProjectCount) {
                     const endpoint = typeof valueSource?.endpoint === 'string' ? valueSource.endpoint : '/api/projects';
                     const totalField = typeof valueSource?.totalField === 'string' ? valueSource.totalField : 'pagination.total';
-                    const res = await fetch(`${endpoint}?page=1&pageSize=1`);
+                    const sep = endpoint.includes('?') ? '&' : '?';
+                    const res = await fetch(`${endpoint}${sep}page=1&pageSize=1`);
                     const json = await res.json().catch(() => ({}));
-                    const total = Number(getByPath(json, totalField) ?? 0);
+                    const total = Array.isArray(json)
+                        ? json.length
+                        : Number(getByPath(json, totalField) ?? 0);
                     setKpiValues((p) => ({ ...p, [w.key]: { loading: false, value: Number.isFinite(total) ? total : 0 } }));
                     return;
                 }
