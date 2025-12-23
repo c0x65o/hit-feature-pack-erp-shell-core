@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-dashboard-shell",
-  "version": "1.0.88",
+  "version": "1.0.89",
   "description": "Dashboard shell with sidebar, topbar, notifications, theme support, ERP UI kit, and table views",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -44,16 +44,14 @@
   },
   "peerDependencies": {
     "@hit/ui-kit": "*",
+    "drizzle-orm": ">=0.30.0",
+    "lucide-react": ">=0.263.0",
+    "next": "^14.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "lucide-react": ">=0.263.0",
-    "react-icons": "^5.5.0",
-    "next": "^14.0.0",
-    "drizzle-orm": ">=0.30.0",
     "react-grid-layout": "^1.4.4",
     "react-resizable": "^3.0.5"
   },
-  "dependencies": {},
   "devDependencies": {
     "@hit/ui-kit": "file:../hit-ui-kit",
     "@types/node": "^20.0.0",
@@ -62,7 +60,6 @@
     "drizzle-orm": "^0.30.0",
     "lucide-react": "^0.460.0",
     "next": "^14.2.5",
-    "react-icons": "^5.5.0",
     "react-grid-layout": "^1.4.4",
     "react-resizable": "^3.0.5",
     "typescript": "^5.0.0"

@@ -14,7 +14,9 @@ export { DashboardShell, useShell } from './components/DashboardShell';
 export { erpKit } from './kit';
 // Re-export UI Kit context for feature packs
 export { useUi, UiKitProvider } from '@hit/ui-kit';
-// Table Views schema
-export { tableViews, tableViewFilters, tableViewsRelations, tableViewFiltersRelations, FILTER_OPERATORS, FILTER_VALUE_TYPES, } from './schema/table-views';
-// Dashboard Definitions schema
-export { dashboardDefinitions, dashboardDefinitionShares, dashboardDefinitionsRelations, dashboardDefinitionSharesRelations, } from './schema/table-views';
+// Schema exports - REMOVED from main index to avoid bundling drizzle-orm in client!
+// Use: import { tableViews, ... } from '@hit/feature-pack-dashboard-shell/schema'
+// Don't import from schema file at all - it pulls in drizzle-orm
+// Filter operators and value types - defined inline to avoid pulling in schema file
+export const FILTER_OPERATORS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'starts_with', 'ends_with', 'in', 'not_in', 'is_null', 'is_not_null'];
+export const FILTER_VALUE_TYPES = ['string', 'number', 'boolean', 'date', 'array'];
