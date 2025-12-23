@@ -3,8 +3,8 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { Menu, Bell, User, Settings, LogOut, ChevronRight, ChevronDown, } from 'lucide-react';
 import { Monitor, Moon, Sun, X } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
 import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit } from '@hit/ui-kit';
+import { LucideIcon } from '../utils/lucide-dynamic';
 const ShellContext = createContext(null);
 export function useShell() {
     const context = useContext(ShellContext);
@@ -153,12 +153,7 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }) {
     const isExpanded = expandedNodes.has(item.id);
     const hasActiveDescendant = navHasActiveDescendant(item, activePath);
     const isActive = activePath === item.path || (hasChildren && hasActiveDescendant);
-    const iconName = item.icon
-        ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-        : '';
-    const IconComponent = item.icon
-        ? LucideIcons[iconName]
-        : null;
+    const iconName = item.icon ? String(item.icon) : '';
     const handleClick = () => {
         if (hasChildren) {
             toggleNode(item.id);
@@ -190,7 +185,7 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }) {
                     cursor: 'pointer',
                     textAlign: 'left',
                     transition: 'all 150ms ease',
-                }), children: [IconComponent && _jsx(IconComponent, { size: 18, style: { flexShrink: 0 } }), _jsx("span", { style: styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }), children: item.label }), item.badge !== undefined && (_jsx("span", { style: styles({
+                }), children: [iconName ? _jsx(LucideIcon, { name: iconName, size: 18, style: { flexShrink: 0 } }) : null, _jsx("span", { style: styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }), children: item.label }), item.badge !== undefined && (_jsx("span", { style: styles({
                             backgroundColor: colors.error.default,
                             color: colors.text.inverse,
                             fontSize: '11px',
@@ -210,12 +205,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
     const hasActiveDescendant = navHasActiveDescendant(item, activePath);
     const isActive = activePath === item.path || (hasChildren && hasActiveDescendant);
     const hasActiveChild = hasChildren && hasActiveDescendant;
-    const iconName = item.icon
-        ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-        : '';
-    const IconComponent = item.icon
-        ? LucideIcons[iconName]
-        : null;
+    const iconName = item.icon ? String(item.icon) : '';
     const handleMouseEnter = () => {
         onCancelClose();
         setIsHovered(true);
@@ -252,12 +242,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
     const renderFlyoutItems = (nodes, depth = 0) => {
         return nodes.map((node, idx) => {
             const child = node;
-            const childIconName = child.icon
-                ? child.icon.charAt(0).toUpperCase() + child.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-                : '';
-            const ChildIconComponent = child.icon
-                ? LucideIcons[childIconName]
-                : null;
+            const childIconName = child.icon ? String(child.icon) : '';
             const childIsActive = activePath === child.path || navHasActiveDescendant(child, activePath);
             const childIsHovered = hoveredChildIdx === idx && depth === 0;
             const paddingLeft = depth > 0 ? spacing.lg : spacing.md;
@@ -278,7 +263,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                             fontSize: ts.body.fontSize,
                             fontWeight: childIsHovered ? 500 : 400,
                             opacity: child.path ? 1 : 0.75,
-                        }), children: [ChildIconComponent && _jsx(ChildIconComponent, { size: 16, style: { flexShrink: 0 } }), _jsx("span", { style: styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }), children: child.label })] }), child.children && child.children.length > 0 && (_jsx("div", { style: styles({ paddingLeft: spacing.md }), children: renderFlyoutItems(child.children, depth + 1) }))] }, `flyout-${item.id}-${depth}-${idx}`));
+                        }), children: [childIconName ? _jsx(LucideIcon, { name: childIconName, size: 16, style: { flexShrink: 0 } }) : null, _jsx("span", { style: styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }), children: child.label })] }), child.children && child.children.length > 0 && (_jsx("div", { style: styles({ paddingLeft: spacing.md }), children: renderFlyoutItems(child.children, depth + 1) }))] }, `flyout-${item.id}-${depth}-${idx}`));
         });
     };
     // Determine icon button styles - more prominent hover
@@ -316,7 +301,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                     transition: 'all 150ms ease',
                     backgroundColor: getIconBgColor(),
                     color: getIconColor(),
-                }), children: IconComponent ? _jsx(IconComponent, { size: 22 }) : _jsx("span", { style: { fontSize: '14px', fontWeight: 600 }, children: item.label.charAt(0) }) }), isOpen && buttonRef.current && (_jsxs("div", { style: styles({
+                }), children: iconName ? _jsx(LucideIcon, { name: iconName, size: 22 }) : _jsx("span", { style: { fontSize: '14px', fontWeight: 600 }, children: item.label.charAt(0) }) }), isOpen && buttonRef.current && (_jsxs("div", { style: styles({
                     position: 'fixed',
                     top: `${buttonRef.current.getBoundingClientRect().top}px`,
                     left: `${buttonRef.current.getBoundingClientRect().right + 4}px`,
@@ -350,7 +335,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                                 color: hoveredChildIdx === 0 ? colors.primary.default : (isActive ? colors.text.inverse : colors.text.secondary),
                                 fontSize: ts.body.fontSize,
                                 fontWeight: hoveredChildIdx === 0 ? 500 : 400,
-                            }), children: [IconComponent && _jsx(IconComponent, { size: 16, style: { flexShrink: 0 } }), _jsxs("span", { children: ["Go to ", item.label] })] })) })] }))] }));
+                            }), children: [iconName ? _jsx(LucideIcon, { name: iconName, size: 16, style: { flexShrink: 0 } }) : null, _jsxs("span", { children: ["Go to ", item.label] })] })) })] }))] }));
 }
 // =============================================================================
 // NAV GROUP HEADER COMPONENT

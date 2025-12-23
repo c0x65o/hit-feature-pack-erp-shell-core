@@ -4,16 +4,14 @@ import React from 'react';
 import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
-import * as LucideIcons from 'lucide-react';
 import * as SimpleIcons from 'react-icons/si';
+import { LucideIcon, type LucideIconComponent } from '../utils/lucide-dynamic';
 
-function resolveLucideIcon(name?: string) {
-  if (!name) return null;
-  const Comp = (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[name];
-  return Comp || null;
+type IconComp = React.ComponentType<{ size?: number; style?: React.CSSProperties; color?: string; className?: string }>;
+
+function lucideComp(name: string): LucideIconComponent {
+  return (props) => <LucideIcon name={name} {...props} />;
 }
-
-type IconComp = React.ComponentType<{ size?: number; style?: React.CSSProperties; color?: string }>;
 
 function toPascal(s: string) {
   return String(s || '')
@@ -40,7 +38,7 @@ function resolvePlatformIcon(name?: string): IconComp | null {
   const val = String(valMaybe || '').trim();
   if (!val) return null;
 
-  const tryLucide = (n: string) => resolveLucideIcon(n) as unknown as IconComp | null;
+  const tryLucide = (n: string) => lucideComp(n) as unknown as IconComp | null;
 
   const trySimple = (key: string) => {
     const pas = toPascal(key);

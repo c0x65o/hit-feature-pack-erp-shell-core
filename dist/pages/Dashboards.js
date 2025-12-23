@@ -4,13 +4,10 @@ import React from 'react';
 import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
-import * as LucideIcons from 'lucide-react';
 import * as SimpleIcons from 'react-icons/si';
-function resolveLucideIcon(name) {
-    if (!name)
-        return null;
-    const Comp = LucideIcons[name];
-    return Comp || null;
+import { LucideIcon } from '../utils/lucide-dynamic';
+function lucideComp(name) {
+    return (props) => _jsx(LucideIcon, { name: name, ...props });
 }
 function toPascal(s) {
     return String(s || '')
@@ -37,7 +34,7 @@ function resolvePlatformIcon(name) {
     const val = String(valMaybe || '').trim();
     if (!val)
         return null;
-    const tryLucide = (n) => resolveLucideIcon(n);
+    const tryLucide = (n) => lucideComp(n);
     const trySimple = (key) => {
         const pas = toPascal(key);
         const candidates = [

@@ -11,9 +11,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { Monitor, Moon, Sun, X } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
 import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit } from '@hit/ui-kit';
 import type { NavItem, ShellUser, Notification, ShellConfig, ConnectionStatus } from '../types';
+import { LucideIcon } from '../utils/lucide-dynamic';
 
 // =============================================================================
 // CONTEXT
@@ -206,12 +206,7 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }: NavItemCo
   const hasActiveDescendant = navHasActiveDescendant(item, activePath);
   const isActive = activePath === item.path || (hasChildren && hasActiveDescendant);
 
-  const iconName = item.icon
-    ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-    : '';
-  const IconComponent = item.icon
-    ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[iconName]
-    : null;
+  const iconName = item.icon ? String(item.icon) : '';
 
   const handleClick = () => {
     if (hasChildren) {
@@ -250,7 +245,7 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }: NavItemCo
           transition: 'all 150ms ease',
         })}
       >
-        {IconComponent && <IconComponent size={18} style={{ flexShrink: 0 }} />}
+        {iconName ? <LucideIcon name={iconName} size={18} style={{ flexShrink: 0 }} /> : null}
         <span style={styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
           {item.label}
         </span>
@@ -316,12 +311,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
   const isActive = activePath === item.path || (hasChildren && hasActiveDescendant);
   const hasActiveChild = hasChildren && hasActiveDescendant;
 
-  const iconName = item.icon
-    ? item.icon.charAt(0).toUpperCase() + item.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-    : '';
-  const IconComponent = item.icon
-    ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[iconName]
-    : null;
+  const iconName = item.icon ? String(item.icon) : '';
 
   const handleMouseEnter = () => {
     onCancelClose();
@@ -363,12 +353,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
   const renderFlyoutItems = (nodes: Omit<NavItem, 'id'>[], depth: number = 0): React.ReactNode => {
     return nodes.map((node, idx) => {
       const child = node as NavItem;
-      const childIconName = child.icon
-        ? child.icon.charAt(0).toUpperCase() + child.icon.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())
-        : '';
-      const ChildIconComponent = child.icon
-        ? (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>>)[childIconName]
-        : null;
+      const childIconName = child.icon ? String(child.icon) : '';
       const childIsActive = activePath === child.path || navHasActiveDescendant(child, activePath);
       const childIsHovered = hoveredChildIdx === idx && depth === 0;
 
@@ -400,7 +385,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
               opacity: child.path ? 1 : 0.75,
             })}
           >
-            {ChildIconComponent && <ChildIconComponent size={16} style={{ flexShrink: 0 }} />}
+            {childIconName ? <LucideIcon name={childIconName} size={16} style={{ flexShrink: 0 }} /> : null}
             <span style={styles({ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
               {child.label}
             </span>
@@ -460,7 +445,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
           color: getIconColor(),
         })}
       >
-        {IconComponent ? <IconComponent size={22} /> : <span style={{ fontSize: '14px', fontWeight: 600 }}>{item.label.charAt(0)}</span>}
+        {iconName ? <LucideIcon name={iconName} size={22} /> : <span style={{ fontSize: '14px', fontWeight: 600 }}>{item.label.charAt(0)}</span>}
       </button>
 
       {/* Flyout menu - uses fixed positioning to escape overflow containers */}
@@ -526,7 +511,7 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
                   fontWeight: hoveredChildIdx === 0 ? 500 : 400,
                 })}
               >
-                {IconComponent && <IconComponent size={16} style={{ flexShrink: 0 }} />}
+                {iconName ? <LucideIcon name={iconName} size={16} style={{ flexShrink: 0 }} /> : null}
                 <span>Go to {item.label}</span>
               </button>
             )}
