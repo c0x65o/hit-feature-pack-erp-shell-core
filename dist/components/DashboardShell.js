@@ -809,14 +809,12 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                         height: '10px',
                                         backgroundColor: connectionStatus === 'connected' ? colors.success.default
                                             : connectionStatus === 'connecting' ? colors.warning.default
-                                                : connectionStatus === 'polling' ? colors.warning.default
-                                                    : colors.error.default,
+                                                : colors.error.default,
                                         borderRadius: radius.full,
                                         ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
                                     }), title: connectionStatus === 'connected' ? 'WebSocket Connected'
                                         : connectionStatus === 'connecting' ? 'Connecting...'
-                                            : connectionStatus === 'polling' ? 'Polling (WebSocket unavailable)'
-                                                : 'Disconnected' }) })] })), showSidebar && (_jsxs("aside", { style: styles({
+                                            : 'Disconnected' }) })] })), showSidebar && (_jsxs("aside", { style: styles({
                             width: EXPANDED_SIDEBAR_WIDTH,
                             minWidth: EXPANDED_SIDEBAR_WIDTH,
                             height: '100%',
@@ -859,14 +857,12 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                 height: '8px',
                                                 backgroundColor: connectionStatus === 'connected' ? colors.success.default
                                                     : connectionStatus === 'connecting' ? colors.warning.default
-                                                        : connectionStatus === 'polling' ? colors.warning.default
-                                                            : colors.error.default,
+                                                        : colors.error.default,
                                                 borderRadius: radius.full,
                                                 ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
                                             }) }), _jsx("span", { children: connectionStatus === 'connected' ? `Connected${version ? ` v${version}` : ''}`
                                                 : connectionStatus === 'connecting' ? 'Connecting...'
-                                                    : connectionStatus === 'polling' ? 'Polling'
-                                                        : 'Disconnected' })] }) })] })), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
+                                                    : 'Disconnected' })] }) })] })), _jsxs("div", { style: styles({ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }), children: [_jsxs("header", { style: styles({
                                     height: '64px',
                                     backgroundColor: colors.bg.surface,
                                     borderBottom: `1px solid ${colors.border.subtle}`,
@@ -1148,7 +1144,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         opacity: profileStatus.saving ? 0.8 : 1,
                                                     }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] })] }) })] }))] }));
 }
-export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], connectionStatus = 'connected', version, }) {
+export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], connectionStatus = 'disconnected', version, }) {
     const config = {
         brandName: configProp.brandName || 'HIT',
         logoUrl: configProp.logoUrl,

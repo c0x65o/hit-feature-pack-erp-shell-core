@@ -1116,14 +1116,12 @@ function ShellContent({
                 height: '10px',
                 backgroundColor: connectionStatus === 'connected' ? colors.success.default 
                   : connectionStatus === 'connecting' ? colors.warning.default
-                  : connectionStatus === 'polling' ? colors.warning.default
                   : colors.error.default,
                 borderRadius: radius.full,
                 ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
               })} title={
                 connectionStatus === 'connected' ? 'WebSocket Connected' 
                 : connectionStatus === 'connecting' ? 'Connecting...'
-                : connectionStatus === 'polling' ? 'Polling (WebSocket unavailable)'
                 : 'Disconnected'
               } />
             </div>
@@ -1221,7 +1219,6 @@ function ShellContent({
                   height: '8px',
                   backgroundColor: connectionStatus === 'connected' ? colors.success.default 
                     : connectionStatus === 'connecting' ? colors.warning.default
-                    : connectionStatus === 'polling' ? colors.warning.default
                     : colors.error.default,
                   borderRadius: radius.full,
                   ...(connectionStatus === 'connecting' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
@@ -1229,7 +1226,6 @@ function ShellContent({
                 <span>
                   {connectionStatus === 'connected' ? `Connected${version ? ` v${version}` : ''}` 
                     : connectionStatus === 'connecting' ? 'Connecting...'
-                    : connectionStatus === 'polling' ? 'Polling'
                     : 'Disconnected'}
                 </span>
               </div>
@@ -1858,7 +1854,7 @@ export function DashboardShell({
   onNavigate,
   onLogout,
   initialNotifications = [],
-  connectionStatus = 'connected',
+  connectionStatus = 'disconnected',
   version,
 }: DashboardShellProps) {
   const config: ShellConfig = {

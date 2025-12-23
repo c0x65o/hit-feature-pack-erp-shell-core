@@ -1,7 +1,7 @@
 /**
  * WebSocket/real-time connection status
  */
-export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'polling';
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
 /**
  * Navigation group names
