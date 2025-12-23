@@ -1181,7 +1181,7 @@ function ShellContent({
                   <NavGroupHeader label={group.label} />
                   {group.items.map((item) => (
                     <NavItemComponent
-                      key={item.id}
+                      key={`${group.group}-${item.id}`}
                       item={item}
                       activePath={activePath}
                       onNavigate={onNavigate}

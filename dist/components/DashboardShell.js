@@ -832,7 +832,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} ${spacing.md}`,
                                     minWidth: EXPANDED_SIDEBAR_WIDTH,
-                                }), children: groupedNavItems.map((group) => (_jsxs("div", { children: [_jsx(NavGroupHeader, { label: group.label }), group.items.map((item) => (_jsx(NavItemComponent, { item: item, activePath: activePath, onNavigate: onNavigate }, item.id)))] }, group.group))) }), _jsx("div", { style: styles({
+                                }), children: groupedNavItems.map((group) => (_jsxs("div", { children: [_jsx(NavGroupHeader, { label: group.label }), group.items.map((item) => (_jsx(NavItemComponent, { item: item, activePath: activePath, onNavigate: onNavigate }, `${group.group}-${item.id}`)))] }, group.group))) }), _jsx("div", { style: styles({
                                     padding: spacing.lg,
                                     borderTop: `1px solid ${colors.border.subtle}`,
                                     flexShrink: 0,
