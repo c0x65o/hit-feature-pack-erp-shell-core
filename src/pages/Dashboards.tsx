@@ -7,7 +7,7 @@ import { useThemeTokens } from '@hit/ui-kit';
 import * as SimpleIcons from 'react-icons/si';
 import { LucideIcon, type LucideIconComponent } from '../utils/lucide-dynamic';
 
-type IconComp = React.ComponentType<{ size?: number; style?: React.CSSProperties; color?: string; className?: string }>;
+type IconComp = React.ComponentType<{ size?: number | string; style?: React.CSSProperties; color?: string; className?: string }>;
 
 function lucideComp(name: string): LucideIconComponent {
   return (props) => <LucideIcon name={name} {...props} />;

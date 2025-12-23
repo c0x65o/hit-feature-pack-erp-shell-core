@@ -6,60 +6,94 @@
  *   and explodes Next.js dev compile times.
  *
  * Solution:
- *   Use lucide-react's `dynamicIconImports` (a map of lazy import functions) and render icons
- *   via React.lazy + Suspense. Unknown icon names throw immediately (hard fail).
+ *   Use a small, explicit allowlist map of Lucide icons (hard fail on unknown names).
+ *
+ * Why not lucide-react/dynamicIconImports?
+ *   That file is huge and can increase cold-compile parse time even if icons are lazy.
  */
 'use client';
 import { jsx as _jsx } from "react/jsx-runtime";
-import React from 'react';
-import dynamicIconImports from 'lucide-react/dynamicIconImports';
-const imports = dynamicIconImports;
-const lazyCache = new Map();
-function toKebabCaseFromPascalOrCamel(name) {
-    // UsersRound -> users-round
-    // ShieldCheck -> shield-check
-    // user-groups -> user-groups
-    const trimmed = String(name || '').trim();
-    if (!trimmed)
-        return '';
-    if (trimmed.includes('-'))
-        return trimmed.toLowerCase();
-    return trimmed
-        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-        .replace(/[_\s]+/g, '-')
-        .toLowerCase();
+import { Activity, BarChart3, BookOpen, Building, Building2, Calendar, ChartBar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, CirclePlay, ClipboardList, Clock, Cog, FileText, Filter, FolderKanban, Gamepad2, History, Home, Key, Layers, LayoutDashboard, Link2, List, ListChecks, Lock, LogIn, Mail, MapPin, Music, Package, Palette, Plug, Rocket, Settings, Share2, Shield, ShieldCheck, ShoppingBag, Store, Tag, TrendingUp, Upload, User, UserPlus, Users, UsersRound, Workflow, Wrench, } from 'lucide-react';
+const ICONS = {
+    // Common shell/navigation icons
+    Activity,
+    BarChart3,
+    BookOpen,
+    Building,
+    Building2,
+    Calendar,
+    ChartBar,
+    CheckCircle,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    CirclePlay,
+    ClipboardList,
+    Clock,
+    Cog,
+    FileText,
+    Filter,
+    FolderKanban,
+    Gamepad2,
+    History,
+    Home,
+    Key,
+    Layers,
+    LayoutDashboard,
+    Link2,
+    List,
+    ListChecks,
+    Lock,
+    LogIn,
+    Mail,
+    MapPin,
+    Music,
+    Package,
+    Palette,
+    Plug,
+    Rocket,
+    Settings,
+    Share2,
+    Shield,
+    ShieldCheck,
+    ShoppingBag,
+    Store,
+    Tag,
+    TrendingUp,
+    Upload,
+    User,
+    UserPlus,
+    Users,
+    UsersRound,
+    Workflow,
+    Wrench,
+};
+function toPascalFromKebab(name) {
+    return String(name || '')
+        .trim()
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join('');
 }
-function normalizeLucideName(name) {
+function normalizeKey(name) {
     const raw = String(name || '').trim();
     if (!raw)
         return '';
-    // Support "lucide:Users" style prefixes
     const val = raw.includes(':') ? raw.split(':', 2)[1] : raw;
-    return toKebabCaseFromPascalOrCamel(val);
+    if (!val)
+        return '';
+    return val.includes('-') || val.includes('_') || val.includes(' ') ? toPascalFromKebab(val) : val;
 }
-function getLazyIcon(name) {
-    const key = normalizeLucideName(name);
+export function LucideIcon({ name, size, color, className, style, }) {
+    const key = normalizeKey(name);
     if (!key) {
         throw new Error(`[hit-dashboard-shell] Lucide icon name is empty`);
     }
-    const importer = imports[key];
-    if (!importer) {
+    const Icon = ICONS[key];
+    if (!Icon) {
         throw new Error(`[hit-dashboard-shell] Unknown Lucide icon "${name}" (normalized: "${key}"). ` +
-            `Fix the nav config/icon name to a valid Lucide icon.`);
+            `Add it to the dashboard-shell icon allowlist or fix the nav config/icon name.`);
     }
-    const cached = lazyCache.get(key);
-    if (cached)
-        return cached;
-    const lazy = React.lazy(async () => {
-        const mod = await importer();
-        return { default: mod.default };
-    });
-    lazyCache.set(key, lazy);
-    return lazy;
-}
-export function LucideIcon({ name, size, color, className, style, }) {
-    const Icon = getLazyIcon(name);
-    // Intentionally no fallback: we want unknown icons to hard-fail,
-    // and known icons to show as soon as the chunk loads.
-    return (_jsx(React.Suspense, { fallback: null, children: _jsx(Icon, { size: size, color: color, className: className, style: style }) }));
+    return _jsx(Icon, { size: size, color: color, className: className, style: style });
 }
