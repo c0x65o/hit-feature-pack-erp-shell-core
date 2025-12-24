@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
+import crypto from 'node:crypto';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -192,7 +193,8 @@ export async function POST(request: NextRequest) {
 
     const providedKey = String(body?.key || '').trim();
     const keyBase = providedKey || `user.${slugify(String(user.sub || 'user'))}.${slugify(name)}`;
-    const key = providedKey || `${keyBase}.${Math.random().toString(36).slice(2, 8)}`;
+    const rand = crypto.randomUUID().replace(/-/g, '').slice(0, 10);
+    const key = providedKey || `${keyBase}.${rand}`;
 
     const now = new Date();
     const res = await db.execute(sql`
