@@ -750,6 +750,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                     height: '100vh',
                     backgroundColor: colors.bg.page,
                     color: colors.text.primary,
+                    margin: 0,
+                    padding: 0,
                 }), children: [!showSidebar && (_jsxs("aside", { style: styles({
                             width: COLLAPSED_RAIL_WIDTH,
                             minWidth: COLLAPSED_RAIL_WIDTH,
@@ -809,16 +811,20 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                             flexDirection: 'column',
                             overflow: 'hidden',
                             flexShrink: 0,
+                            margin: 0,
+                            padding: 0,
                         }), children: [_jsxs("div", { style: styles({
                                     height: '64px',
-                                    minWidth: EXPANDED_SIDEBAR_WIDTH,
+                                    width: '100%',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    padding: `0 ${spacing.lg}`,
+                                    padding: `0 ${spacing.md}`,
+                                    margin: 0,
                                     borderBottom: `1px solid ${colors.border.subtle}`,
                                     flexShrink: 0,
-                                }), children: [_jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm }), children: [_jsx("div", { style: styles({
+                                    boxSizing: 'border-box',
+                                }), children: [_jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.sm, minWidth: 0, flex: 1 }), children: [_jsx("div", { style: styles({
                                                     width: '32px',
                                                     height: '32px',
                                                     background: 'linear-gradient(135deg, #F26522, #FF8C42)',
@@ -827,7 +833,12 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     overflow: 'hidden',
-                                                }), children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '20px', height: '20px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.body.fontSize }), children: config.brandName.charAt(0) })) }), _jsx("span", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary }), children: config.brandName })] }), _jsx("button", { onClick: () => setMenuOpen(false), style: { ...iconButtonStyle, width: '36px', height: '36px' }, children: _jsx(Menu, { size: 20 }) })] }), _jsx("nav", { ref: expandedNavRef, onScroll: handleNavScroll, style: styles({
+                                                }), children: config.logoUrl ? (_jsx("img", { src: config.logoUrl, alt: config.brandName, style: { width: '20px', height: '20px', objectFit: 'contain' } })) : (_jsx("span", { style: styles({ color: '#FFFFFF', fontWeight: 700, fontSize: ts.body.fontSize }), children: config.brandName.charAt(0) })) }), _jsx("span", { style: styles({ fontSize: ts.heading3.fontSize, fontWeight: ts.heading3.fontWeight, color: colors.text.primary }), children: config.brandName })] }), _jsx("button", { onClick: () => setMenuOpen(false), style: {
+                                            ...iconButtonStyle,
+                                            width: '36px',
+                                            height: '36px',
+                                            flexShrink: 0,
+                                        }, children: _jsx(Menu, { size: 20 }) })] }), _jsx("nav", { ref: expandedNavRef, onScroll: handleNavScroll, style: styles({
                                     flex: 1,
                                     overflowY: 'auto',
                                     padding: `${spacing.sm} ${spacing.md}`,

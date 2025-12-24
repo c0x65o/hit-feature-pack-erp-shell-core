@@ -1014,6 +1014,8 @@ function ShellContent({
         height: '100vh',
         backgroundColor: colors.bg.page,
         color: colors.text.primary,
+        margin: 0,
+        padding: 0,
       })}>
         {/* Collapsed Rail - always visible, shows icons when sidebar is collapsed */}
         {!showSidebar && (
@@ -1125,19 +1127,23 @@ function ShellContent({
             flexDirection: 'column',
             overflow: 'hidden',
             flexShrink: 0,
+            margin: 0,
+            padding: 0,
           })}>
             {/* Sidebar Header */}
             <div style={styles({
               height: '64px',
-              minWidth: EXPANDED_SIDEBAR_WIDTH,
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: `0 ${spacing.lg}`,
+              padding: `0 ${spacing.md}`,
+              margin: 0,
               borderBottom: `1px solid ${colors.border.subtle}`,
               flexShrink: 0,
+              boxSizing: 'border-box',
             })}>
-              <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm })}>
+              <div style={styles({ display: 'flex', alignItems: 'center', gap: spacing.sm, minWidth: 0, flex: 1 })}>
                 <div style={styles({
                   width: '32px',
                   height: '32px',
@@ -1160,7 +1166,15 @@ function ShellContent({
                   {config.brandName}
                 </span>
               </div>
-              <button onClick={() => setMenuOpen(false)} style={{ ...iconButtonStyle, width: '36px', height: '36px' }}>
+              <button 
+                onClick={() => setMenuOpen(false)} 
+                style={{ 
+                  ...iconButtonStyle, 
+                  width: '36px', 
+                  height: '36px',
+                  flexShrink: 0,
+                }}
+              >
                 <Menu size={20} />
               </button>
             </div>
