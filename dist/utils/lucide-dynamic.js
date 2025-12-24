@@ -1,82 +1,12 @@
 /**
- * Hard-fail dynamic Lucide icon resolver without importing the entire icon set.
+ * Dynamic Lucide icon resolver using wildcard import.
  *
- * Problem:
- *   `import * as LucideIcons from 'lucide-react'` pulls ~1,300 icons into the module graph
- *   and explodes Next.js dev compile times.
- *
- * Solution:
- *   Use a small, explicit allowlist map of Lucide icons (hard fail on unknown names).
- *
- * Why not lucide-react/dynamicIconImports?
- *   That file is huge and can increase cold-compile parse time even if icons are lazy.
+ * Performance testing showed minimal difference between wildcard and strict imports,
+ * so we use wildcard for simplicity and flexibility.
  */
 'use client';
 import { jsx as _jsx } from "react/jsx-runtime";
-import { Activity, AlertTriangle, BadgeCheck, BarChart3, BookOpen, Building, Building2, Calendar, ChartBar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, CirclePlay, ClipboardList, Clock, Cog, DollarSign, Edit, Edit2, Eye, EyeOff, FileText, Filter, FolderKanban, Gamepad2, History, Home, Key, Layers, LayoutDashboard, Link2, List, ListChecks, Lock, LogIn, Mail, MapPin, Music, Package, Palette, Plug, Rocket, Settings, Share2, Shield, ShieldCheck, ShoppingBag, Store, Tag, Trash2, TrendingDown, TrendingUp, Upload, User, UserPlus, Users, UsersRound, Workflow, Wrench, } from 'lucide-react';
-const ICONS = {
-    // Common shell/navigation icons
-    Activity,
-    AlertTriangle,
-    BadgeCheck,
-    BarChart3,
-    BookOpen,
-    Building,
-    Building2,
-    Calendar,
-    ChartBar,
-    CheckCircle,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    CirclePlay,
-    ClipboardList,
-    Clock,
-    Cog,
-    DollarSign,
-    Edit,
-    Edit2,
-    Eye,
-    EyeOff,
-    FileText,
-    Filter,
-    FolderKanban,
-    Gamepad2,
-    History,
-    Home,
-    Key,
-    Layers,
-    LayoutDashboard,
-    Link2,
-    List,
-    ListChecks,
-    Lock,
-    LogIn,
-    Mail,
-    MapPin,
-    Music,
-    Package,
-    Palette,
-    Plug,
-    Rocket,
-    Settings,
-    Share2,
-    Shield,
-    ShieldCheck,
-    ShoppingBag,
-    Store,
-    Tag,
-    Trash2,
-    TrendingDown,
-    TrendingUp,
-    Upload,
-    User,
-    UserPlus,
-    Users,
-    UsersRound,
-    Workflow,
-    Wrench,
-};
+import * as LucideIcons from 'lucide-react';
 function toPascalFromKebab(name) {
     return String(name || '')
         .trim()
@@ -99,10 +29,12 @@ export function LucideIcon({ name, size, color, className, style, }) {
     if (!key) {
         throw new Error(`[hit-dashboard-shell] Lucide icon name is empty`);
     }
-    const Icon = ICONS[key];
+    // `lucide-react`'s module namespace includes exports that don't match our component shape
+    // (e.g. the base `Icon` component). We only need runtime lookup by key, so cast via `unknown`.
+    const Icon = LucideIcons[key];
     if (!Icon) {
         throw new Error(`[hit-dashboard-shell] Unknown Lucide icon "${name}" (normalized: "${key}"). ` +
-            `Add it to the dashboard-shell icon allowlist or fix the nav config/icon name.`);
+            `Check the icon name in your nav config.`);
     }
     return _jsx(Icon, { size: size, color: color, className: className, style: style });
 }

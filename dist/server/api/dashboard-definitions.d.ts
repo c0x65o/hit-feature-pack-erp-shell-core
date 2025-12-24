@@ -17,4 +17,23 @@ export declare function GET(request: NextRequest): Promise<NextResponse<{
 }> | NextResponse<{
     error: any;
 }>>;
+/**
+ * POST /api/dashboard-definitions
+ *
+ * Create a user-owned dashboard definition.
+ * Body:
+ *  - name: string (required)
+ *  - description?: string
+ *  - visibility?: 'public' | 'private' (default: private)
+ *  - scope?: { kind: 'global' } | { kind: 'pack', pack: string }
+ *  - pack?: string (optional; used as scope fallback when scope is omitted)
+ *  - key?: string (optional; otherwise generated)
+ *  - definition?: object (required unless sourceKey provided)
+ *  - sourceKey?: string (optional; copies an existing dashboard, then applies overrides)
+ */
+export declare function POST(request: NextRequest): Promise<NextResponse<{
+    data: any;
+}> | NextResponse<{
+    error: any;
+}>>;
 //# sourceMappingURL=dashboard-definitions.d.ts.map
