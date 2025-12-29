@@ -393,20 +393,6 @@ export function Dashboards() {
     const [loadingDash, setLoadingDash] = React.useState(false);
     const [error, setError] = React.useState(null);
     const [catalogByKey, setCatalogByKey] = React.useState({});
-    // Optional: scope dashboard widgets to a Segment (admin-only; segment APIs are admin-gated).
-    const [segments, setSegments] = React.useState([]);
-    const [segmentsLoading, setSegmentsLoading] = React.useState(false);
-    const [scopeSegmentKey, setScopeSegmentKey] = React.useState(() => {
-        if (typeof window === 'undefined')
-            return '';
-        return (new URLSearchParams(window.location.search).get('segment') || '').trim();
-    });
-    const [scopeLoading, setScopeLoading] = React.useState(false);
-    const [scopeError, setScopeError] = React.useState(null);
-    const [scopeEntityKind, setScopeEntityKind] = React.useState('');
-    const [scopeEntityIds, setScopeEntityIds] = React.useState([]);
-    const [scopeTotal, setScopeTotal] = React.useState(0);
-    const [scopeTruncated, setScopeTruncated] = React.useState(false);
     const [preset, setPreset] = React.useState('last_30_days');
     const [customStart, setCustomStart] = React.useState(() => todayISODate());
     const [customEnd, setCustomEnd] = React.useState(() => todayISODate());
@@ -446,55 +432,6 @@ export function Dashboards() {
             // ignore
         }
     }, []);
-    const loadSegments = React.useCallback(async () => {
-        setSegmentsLoading(true);
-        try {
-            const res = await fetch('/api/metrics/segments', { method: 'GET' });
-            const json = await res.json().catch(() => ({}));
-            // Segment APIs are admin-gated. If we're not allowed, just disable this feature quietly.
-            if (res.status === 401 || res.status === 403) {
-                setSegments([]);
-                return;
-            }
-            if (!res.ok)
-                throw new Error(json?.error || `Failed to load segments (${res.status})`);
-            const rows = Array.isArray(json?.data) ? json.data : [];
-            setSegments(rows
-                .map((r) => ({
-                id: String(r?.id || ''),
-                key: String(r?.key || '').trim(),
-                entityKind: String(r?.entityKind || '').trim(),
-                label: String(r?.label || r?.key || '').trim(),
-                isActive: Boolean(r?.isActive !== false),
-            }))
-                .filter((r) => r.key && r.entityKind));
-        }
-        catch (e) {
-            setSegments([]);
-        }
-        finally {
-            setSegmentsLoading(false);
-        }
-    }, []);
-    const entityScope = React.useMemo(() => {
-        if (!scopeSegmentKey || !scopeEntityKind || !scopeEntityIds.length)
-            return null;
-        return { segmentKey: scopeSegmentKey, entityKind: scopeEntityKind, entityIds: scopeEntityIds };
-    }, [scopeSegmentKey, scopeEntityKind, scopeEntityIds]);
-    const applyEntityScope = React.useCallback((body) => {
-        if (!entityScope)
-            return body;
-        const next = { ...(body || {}) };
-        const ek = typeof next.entityKind === 'string' ? next.entityKind : '';
-        if (!ek || ek !== entityScope.entityKind)
-            return next;
-        if (typeof next.entityId === 'string' && next.entityId.trim())
-            return next;
-        if (Array.isArray(next.entityIds) && next.entityIds.length)
-            return next;
-        next.entityIds = entityScope.entityIds;
-        return next;
-    }, [entityScope]);
     function buildCatalogMap(items) {
         const map = {};
         for (const it of items) {
@@ -607,7 +544,6 @@ export function Dashboards() {
     React.useEffect(() => {
         loadCatalog();
         loadList();
-        loadSegments();
     }, []);
     React.useEffect(() => {
         if (!selectedKey)
@@ -621,90 +557,6 @@ export function Dashboards() {
         }
         loadDefinition(selectedKey);
     }, [selectedKey]);
-    React.useEffect(() => {
-        // keep segment scope in sync with URL
-        if (typeof window === 'undefined')
-            return;
-        const sp = new URLSearchParams(window.location.search);
-        if (scopeSegmentKey)
-            sp.set('segment', scopeSegmentKey);
-        else
-            sp.delete('segment');
-        const next = `${window.location.pathname}?${sp.toString()}`;
-        window.history.replaceState({}, '', next);
-    }, [scopeSegmentKey]);
-    React.useEffect(() => {
-        // Load up to 1000 entityIds for the selected segment (metrics/query max is 1000).
-        if (!scopeSegmentKey) {
-            setScopeError(null);
-            setScopeEntityKind('');
-            setScopeEntityIds([]);
-            setScopeTotal(0);
-            setScopeTruncated(false);
-            return;
-        }
-        const seg = segments.find((s) => s.key === scopeSegmentKey);
-        if (!seg)
-            return;
-        let cancelled = false;
-        (async () => {
-            setScopeLoading(true);
-            setScopeError(null);
-            try {
-                const MAX = 1000;
-                const PAGE_SIZE = 500;
-                const out = [];
-                let total = 0;
-                for (let page = 1; page <= 3; page++) {
-                    if (out.length >= MAX)
-                        break;
-                    const res = await fetch('/api/metrics/segments/query', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ segmentKey: seg.key, entityKind: seg.entityKind, page, pageSize: PAGE_SIZE }),
-                    });
-                    const json = await res.json().catch(() => ({}));
-                    if (!res.ok)
-                        throw new Error(json?.error || `segments/query ${res.status}`);
-                    const data = json?.data || {};
-                    const items = Array.isArray(data.items) ? data.items : [];
-                    total = Number(data.total || 0) || 0;
-                    for (const id of items) {
-                        const s = String(id || '').trim();
-                        if (s)
-                            out.push(s);
-                    }
-                    if (out.length >= total)
-                        break;
-                    if (items.length === 0)
-                        break;
-                }
-                const unique = Array.from(new Set(out)).slice(0, MAX);
-                if (cancelled)
-                    return;
-                setScopeEntityKind(seg.entityKind);
-                setScopeEntityIds(unique);
-                setScopeTotal(total);
-                setScopeTruncated(total > unique.length);
-            }
-            catch (e) {
-                if (cancelled)
-                    return;
-                setScopeError(e instanceof Error ? e.message : 'Failed to resolve segment members');
-                setScopeEntityKind('');
-                setScopeEntityIds([]);
-                setScopeTotal(0);
-                setScopeTruncated(false);
-            }
-            finally {
-                if (!cancelled)
-                    setScopeLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [scopeSegmentKey, segments]);
     const resolveProjectNames = React.useCallback(async (ids) => {
         const missing = ids.filter((id) => id && !projectNames[id]);
         if (!missing.length)
@@ -800,7 +652,7 @@ export function Dashboards() {
                         const roll = String(it.rollup_strategy || '').toLowerCase();
                         const timeKind = String(it.time_kind || '').toLowerCase();
                         const agg = roll === 'last' || timeKind === 'realtime' || timeKind === 'none' ? 'last' : 'sum';
-                        const body = applyEntityScope({ metricKey: mk, bucket: 'none', agg, entityKind, groupByEntityId: true });
+                        const body = { metricKey: mk, bucket: 'none', agg, entityKind, groupByEntityId: true };
                         if (t)
                             Object.assign(body, t);
                         return body;
@@ -878,13 +730,13 @@ export function Dashboards() {
                 // Sum the latest value per entity (useful for totals like wishlist_cumulative_total across projects).
                 if (valueSource?.kind === 'metrics_sum_last_per_entity' && typeof valueSource.metricKey === 'string') {
                     const t = effectiveTime(w); // usually null for all_time
-                    const body = applyEntityScope({
+                    const body = {
                         metricKey: String(valueSource.metricKey),
                         bucket: 'none',
                         agg: 'last',
                         entityKind: typeof valueSource.entityKind === 'string' ? valueSource.entityKind : (w?.query?.entityKind || undefined),
                         groupByEntityId: true,
-                    });
+                    };
                     if (t)
                         Object.assign(body, t);
                     const res = await fetch('/api/metrics/query', {
@@ -905,13 +757,13 @@ export function Dashboards() {
                 if (valueSource?.kind === 'metrics_sum_agg_per_entity' && typeof valueSource.metricKey === 'string') {
                     const t = effectiveTime(w);
                     const agg = typeof valueSource.agg === 'string' ? valueSource.agg : 'sum';
-                    const body = applyEntityScope({
+                    const body = {
                         metricKey: String(valueSource.metricKey),
                         bucket: 'none',
                         agg,
                         entityKind: typeof valueSource.entityKind === 'string' ? valueSource.entityKind : (w?.query?.entityKind || undefined),
                         groupByEntityId: true,
-                    });
+                    };
                     if (t)
                         Object.assign(body, t);
                     const res = await fetch('/api/metrics/query', {
@@ -934,7 +786,7 @@ export function Dashboards() {
                     const keys = valueSource.metricKeys.map((x) => String(x || '').trim()).filter(Boolean);
                     let sumAll = 0;
                     for (const mk of keys) {
-                        const body = applyEntityScope({ metricKey: mk, bucket: 'none', agg: 'last', entityKind, groupByEntityId: true });
+                        const body = { metricKey: mk, bucket: 'none', agg: 'last', entityKind, groupByEntityId: true };
                         if (t)
                             Object.assign(body, t);
                         const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -948,7 +800,7 @@ export function Dashboards() {
                     return;
                 }
                 const t = effectiveTime(w);
-                const body = applyEntityScope({ ...(w.query || {}) });
+                const body = { ...(w.query || {}) };
                 if (t)
                     Object.assign(body, t);
                 const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -964,7 +816,7 @@ export function Dashboards() {
                     const dur = end.getTime() - start.getTime();
                     const prevEnd = new Date(start.getTime() - 1);
                     const prevStart = new Date(prevEnd.getTime() - dur);
-                    const prevBody = applyEntityScope({ ...(w.query || {}), start: prevStart.toISOString(), end: prevEnd.toISOString() });
+                    const prevBody = { ...(w.query || {}), start: prevStart.toISOString(), end: prevEnd.toISOString() };
                     const r2 = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) });
                     const j2 = await r2.json().catch(() => ({}));
                     const rr = Array.isArray(j2.data) ? j2.data : [];
@@ -987,7 +839,7 @@ export function Dashboards() {
         await Promise.all(pies.map(async (w) => {
             try {
                 const t = effectiveTime(w);
-                const body = applyEntityScope({ ...(w.query || {}) });
+                const body = { ...(w.query || {}) };
                 if (t)
                     Object.assign(body, t);
                 const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -1020,7 +872,7 @@ export function Dashboards() {
                     const out = [];
                     for (let i = 0; i < w.series.length; i++) {
                         const s = w.series[i];
-                        const body = applyEntityScope({ ...(s.query || {}), start: t.start, end: t.end });
+                        const body = { ...(s.query || {}), start: t.start, end: t.end };
                         const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                         const json = await res.json().catch(() => ({}));
                         if (!res.ok)
@@ -1050,7 +902,7 @@ export function Dashboards() {
                     const totalsRes = await fetch('/api/metrics/query', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(applyEntityScope({ metricKey, bucket: 'none', agg, entityKind, groupByEntityId: true, start: t.start, end: t.end })),
+                        body: JSON.stringify({ metricKey, bucket: 'none', agg, entityKind, groupByEntityId: true, start: t.start, end: t.end }),
                     });
                     const totalsJson = await totalsRes.json().catch(() => ({}));
                     const totalsRows = Array.isArray(totalsJson.data) ? totalsJson.data : [];
@@ -1064,7 +916,7 @@ export function Dashboards() {
                     const seriesRes = await fetch('/api/metrics/query', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(applyEntityScope({ metricKey, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end })),
+                        body: JSON.stringify({ metricKey, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end }),
                     });
                     const seriesJson = await seriesRes.json().catch(() => ({}));
                     const seriesRows = Array.isArray(seriesJson.data) ? seriesJson.data : [];
@@ -1072,7 +924,7 @@ export function Dashboards() {
                     const totalRes = await fetch('/api/metrics/query', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(applyEntityScope({ metricKey, bucket, agg, entityKind, start: t.start, end: t.end })),
+                        body: JSON.stringify({ metricKey, bucket, agg, entityKind, start: t.start, end: t.end }),
                     });
                     const totalJson = await totalRes.json().catch(() => ({}));
                     const totalRows = Array.isArray(totalJson.data) ? totalJson.data : [];
@@ -1143,7 +995,7 @@ export function Dashboards() {
                         const totalsRes = await fetch('/api/metrics/query', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(applyEntityScope({ metricKey: mk, bucket: 'none', agg, entityKind, groupByEntityId: true, start: t.start, end: t.end })),
+                            body: JSON.stringify({ metricKey: mk, bucket: 'none', agg, entityKind, groupByEntityId: true, start: t.start, end: t.end }),
                         });
                         const totalsJson = await totalsRes.json().catch(() => ({}));
                         const totalsRows = Array.isArray(totalsJson.data) ? totalsJson.data : [];
@@ -1166,7 +1018,7 @@ export function Dashboards() {
                         const seriesRes = await fetch('/api/metrics/query', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(applyEntityScope({ metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end })),
+                            body: JSON.stringify({ metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end }),
                         });
                         const seriesJson = await seriesRes.json().catch(() => ({}));
                         const seriesRows = Array.isArray(seriesJson.data) ? seriesJson.data : [];
@@ -1191,7 +1043,7 @@ export function Dashboards() {
                             const res = await fetch('/api/metrics/query', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(applyEntityScope({ metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, start: t.start, end: t.end })),
+                                body: JSON.stringify({ metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, start: t.start, end: t.end }),
                             });
                             const json = await res.json().catch(() => ({}));
                             const rows = Array.isArray(json.data) ? json.data : [];
@@ -1258,12 +1110,12 @@ export function Dashboards() {
         else {
             setTimelineEvents([]);
         }
-    }, [definition?.key, effectiveTime, range.start, range.end, resolveProjectNames, projectNames, lineBucketByWidgetKey, applyEntityScope]);
+    }, [definition?.key, effectiveTime, range.start, range.end, resolveProjectNames, projectNames, lineBucketByWidgetKey]);
     React.useEffect(() => {
         if (!definition)
             return;
         queryMetrics();
-    }, [definition?.key, preset, customStart, customEnd, applyEntityScope, scopeSegmentKey, scopeEntityIds.length, scopeEntityKind]);
+    }, [definition?.key, preset, customStart, customEnd]);
     const openShares = async () => {
         if (!definition)
             return;
@@ -1366,15 +1218,7 @@ export function Dashboards() {
                                                     catch {
                                                         // ignore
                                                     }
-                                                }, children: "Ask AI to create a dashboard" }), _jsx(Button, { variant: "secondary", onClick: loadList, children: "Refresh" })] })] }) }) })) : null, _jsxs("div", { className: "topbar", children: [_jsx("div", { style: { minWidth: 260 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("strong", { children: definition?.name || 'Dashboard' }), pack ? _jsxs(Badge, { variant: "info", children: ["pack: ", pack] }) : _jsx(Badge, { variant: "info", children: "global" }), definition?.isOwner ? (_jsx(Badge, { variant: "success", children: "yours" })) : definition?.isShared ? (_jsx(Badge, { variant: "warning", children: "shared" })) : definition?.visibility === 'public' ? (_jsx(Badge, { variant: "default", children: "public" })) : null, scopeSegmentKey ? (_jsxs(Badge, { variant: "info", children: ["segment: ", scopeSegmentKey, scopeLoading
-                                                    ? ' (loading…)'
-                                                    : scopeError
-                                                        ? ' (error)'
-                                                        : scopeTruncated
-                                                            ? ` (${scopeEntityIds.length}+ of ${scopeTotal || '…'})`
-                                                            : scopeTotal
-                                                                ? ` (${scopeEntityIds.length} of ${scopeTotal})`
-                                                                : ` (${scopeEntityIds.length})`] })) : null] }) }), _jsxs("div", { className: "controls", children: [list.length > 0 ? (_jsx(Dropdown, { align: "right", trigger: _jsx(Button, { variant: "secondary", children: "Switch" }), items: list.map((d) => {
+                                                }, children: "Ask AI to create a dashboard" }), _jsx(Button, { variant: "secondary", onClick: loadList, children: "Refresh" })] })] }) }) })) : null, _jsxs("div", { className: "topbar", children: [_jsx("div", { style: { minWidth: 260 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("strong", { children: definition?.name || 'Dashboard' }), pack ? _jsxs(Badge, { variant: "info", children: ["pack: ", pack] }) : _jsx(Badge, { variant: "info", children: "global" }), definition?.isOwner ? (_jsx(Badge, { variant: "success", children: "yours" })) : definition?.isShared ? (_jsx(Badge, { variant: "warning", children: "shared" })) : definition?.visibility === 'public' ? (_jsx(Badge, { variant: "default", children: "public" })) : null] }) }), _jsxs("div", { className: "controls", children: [list.length > 0 ? (_jsx(Dropdown, { align: "right", trigger: _jsx(Button, { variant: "secondary", children: "Switch" }), items: list.map((d) => {
                                             const suffix = d.isOwner ? ' (yours)' : d.isShared ? ' (shared)' : d.visibility === 'public' ? ' (public)' : '';
                                             const current = d.key === selectedKey ? ' ✓' : '';
                                             return {
@@ -1382,12 +1226,7 @@ export function Dashboards() {
                                                 disabled: d.key === selectedKey,
                                                 onClick: () => setSelectedKey(d.key),
                                             };
-                                        }) })) : null, segmentsLoading || segments.length ? (_jsx(Select, { value: scopeSegmentKey, onChange: (v) => setScopeSegmentKey(selectValue(v)), options: [
-                                            { value: '', label: 'All entities' },
-                                            ...segments
-                                                .filter((s) => s.isActive)
-                                                .map((s) => ({ value: s.key, label: `${s.label} (${s.entityKind})` })),
-                                        ] })) : null, _jsx(Select, { value: preset, onChange: (v) => setPreset(selectValue(v)), options: [
+                                        }) })) : null, _jsx(Select, { value: preset, onChange: (v) => setPreset(selectValue(v)), options: [
                                             { value: 'last_7_days', label: 'Last 7 days' },
                                             { value: 'last_30_days', label: 'Last 30 days' },
                                             { value: 'last_90_days', label: 'Last 90 days' },
