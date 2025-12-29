@@ -1322,11 +1322,17 @@ export function Dashboards() {
           align-items: center;
           gap: 8px;
           font-size: 12px;
+          line-height: 16px;
+          min-height: 16px;
           color: var(--hit-muted-foreground);
           text-decoration: none;
           margin-top: 4px;
         }
         .kpi-action:hover { color: var(--hit-foreground); text-decoration: underline; }
+        .kpi-action.kpi-action--placeholder {
+          visibility: hidden;
+          pointer-events: none;
+        }
         .kpi-catalog-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1441,7 +1447,7 @@ export function Dashboards() {
                                                                     border: `1px solid ${colors.border.subtle}`,
                                                                     background: colors.bg.muted,
                                                                     color: iconColor,
-                                                                }, children: _jsx(Icon, { size: 22, style: { color: iconColor } }) })) : null] }), prev !== null ? (_jsxs("div", { className: "kpi-delta", children: [_jsx("span", { style: { color: pct >= 0 ? '#22c55e' : '#ef4444' }, children: formatNumber(pct, 'percent') }), _jsx("span", { style: { opacity: 0.7 }, children: "vs previous period" })] })) : null, action?.href && action?.label ? (_jsx("a", { className: "kpi-action", href: String(action.href), children: String(action.label) })) : null] }) }) }, w.key));
+                                                                }, children: _jsx(Icon, { size: 22, style: { color: iconColor } }) })) : null] }), prev !== null ? (_jsxs("div", { className: "kpi-delta", children: [_jsx("span", { style: { color: pct >= 0 ? '#22c55e' : '#ef4444' }, children: formatNumber(pct, 'percent') }), _jsx("span", { style: { opacity: 0.7 }, children: "vs previous period" })] })) : null, action?.href && action?.label ? (_jsx("a", { className: "kpi-action", href: String(action.href), children: String(action.label) })) : (_jsx("span", { className: "kpi-action kpi-action--placeholder", "aria-hidden": "true", children: "\u00A0" }))] }) }) }, w.key));
                                 }
                                 if (w.kind === 'pie') {
                                     const st = pieRows[w.key];

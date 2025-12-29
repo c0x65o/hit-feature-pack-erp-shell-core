@@ -1623,11 +1623,17 @@ export function Dashboards() {
           align-items: center;
           gap: 8px;
           font-size: 12px;
+          line-height: 16px;
+          min-height: 16px;
           color: var(--hit-muted-foreground);
           text-decoration: none;
           margin-top: 4px;
         }
         .kpi-action:hover { color: var(--hit-foreground); text-decoration: underline; }
+        .kpi-action.kpi-action--placeholder {
+          visibility: hidden;
+          pointer-events: none;
+        }
         .kpi-catalog-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1904,7 +1910,11 @@ export function Dashboards() {
                           <a className="kpi-action" href={String(action.href)}>
                             {String(action.label)}
                           </a>
-                        ) : null}
+                        ) : (
+                          <span className="kpi-action kpi-action--placeholder" aria-hidden="true">
+                            &nbsp;
+                          </span>
+                        )}
                       </div>
                     </Card>
                   </div>
