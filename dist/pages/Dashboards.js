@@ -573,7 +573,9 @@ export function Dashboards() {
             const items = Array.isArray(json.data) ? json.data : [];
             setList(items);
             const fromUrl = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('key') || '').trim() : '';
-            const pick = fromUrl || items[0]?.key || '';
+            // Only use the key from URL if it exists in the current pack's dashboard list
+            const validFromUrl = fromUrl && items.some((item) => item.key === fromUrl) ? fromUrl : '';
+            const pick = validFromUrl || items[0]?.key || '';
             setSelectedKey((prev) => prev || pick);
         }
         catch (e) {
@@ -1364,7 +1366,7 @@ export function Dashboards() {
                                                     catch {
                                                         // ignore
                                                     }
-                                                }, children: "Ask AI to create a dashboard" }), _jsx(Button, { variant: "secondary", onClick: loadList, children: "Refresh" })] })] }) }) })) : null, _jsxs("div", { className: "topbar", children: [_jsx("div", { style: { minWidth: 260 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("strong", { children: definition?.name || 'Dashboard' }), pack ? _jsxs(Badge, { variant: "info", children: ["pack: ", pack] }) : _jsx(Badge, { variant: "info", children: "global" }), definition?.visibility ? _jsx(Badge, { variant: "default", children: definition.visibility }) : null, scopeSegmentKey ? (_jsxs(Badge, { variant: "info", children: ["segment: ", scopeSegmentKey, scopeLoading
+                                                }, children: "Ask AI to create a dashboard" }), _jsx(Button, { variant: "secondary", onClick: loadList, children: "Refresh" })] })] }) }) })) : null, _jsxs("div", { className: "topbar", children: [_jsx("div", { style: { minWidth: 260 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("strong", { children: definition?.name || 'Dashboard' }), pack ? _jsxs(Badge, { variant: "info", children: ["pack: ", pack] }) : _jsx(Badge, { variant: "info", children: "global" }), definition?.isOwner ? (_jsx(Badge, { variant: "success", children: "yours" })) : definition?.isShared ? (_jsx(Badge, { variant: "warning", children: "shared" })) : definition?.visibility === 'public' ? (_jsx(Badge, { variant: "default", children: "public" })) : null, scopeSegmentKey ? (_jsxs(Badge, { variant: "info", children: ["segment: ", scopeSegmentKey, scopeLoading
                                                     ? ' (loading…)'
                                                     : scopeError
                                                         ? ' (error)'
@@ -1372,11 +1374,15 @@ export function Dashboards() {
                                                             ? ` (${scopeEntityIds.length}+ of ${scopeTotal || '…'})`
                                                             : scopeTotal
                                                                 ? ` (${scopeEntityIds.length} of ${scopeTotal})`
-                                                                : ` (${scopeEntityIds.length})`] })) : null] }) }), _jsxs("div", { className: "controls", children: [list.length > 0 ? (_jsx(Dropdown, { align: "right", trigger: _jsx(Button, { variant: "secondary", children: "Switch" }), items: list.map((d) => ({
-                                            label: d.key === selectedKey ? `${d.name} (current)` : d.name,
-                                            disabled: d.key === selectedKey,
-                                            onClick: () => setSelectedKey(d.key),
-                                        })) })) : null, segmentsLoading || segments.length ? (_jsx(Select, { value: scopeSegmentKey, onChange: (v) => setScopeSegmentKey(selectValue(v)), options: [
+                                                                : ` (${scopeEntityIds.length})`] })) : null] }) }), _jsxs("div", { className: "controls", children: [list.length > 0 ? (_jsx(Dropdown, { align: "right", trigger: _jsx(Button, { variant: "secondary", children: "Switch" }), items: list.map((d) => {
+                                            const suffix = d.isOwner ? ' (yours)' : d.isShared ? ' (shared)' : d.visibility === 'public' ? ' (public)' : '';
+                                            const current = d.key === selectedKey ? ' ✓' : '';
+                                            return {
+                                                label: `${d.name}${suffix}${current}`,
+                                                disabled: d.key === selectedKey,
+                                                onClick: () => setSelectedKey(d.key),
+                                            };
+                                        }) })) : null, segmentsLoading || segments.length ? (_jsx(Select, { value: scopeSegmentKey, onChange: (v) => setScopeSegmentKey(selectValue(v)), options: [
                                             { value: '', label: 'All entities' },
                                             ...segments
                                                 .filter((s) => s.isActive)
@@ -1388,7 +1394,7 @@ export function Dashboards() {
                                             { value: 'month_to_date', label: 'Month to date' },
                                             { value: 'year_to_date', label: 'Year to date' },
                                             { value: 'custom', label: 'Custom' },
-                                        ] }), preset === 'custom' ? (_jsxs(_Fragment, { children: [_jsx(Input, { type: "date", value: customStart, onChange: (e) => setCustomStart(e.target.value) }), _jsx(Input, { type: "date", value: customEnd, onChange: (e) => setCustomEnd(e.target.value) })] })) : null, _jsx(Button, { onClick: () => queryMetrics(), disabled: loadingDash, children: "Refresh" }), definition ? (_jsx(Button, { variant: "secondary", onClick: openShares, disabled: !definition, children: "Share" })) : null] })] }), _jsx("div", { className: "subtitle", children: definition?.description || '—' }), error ? _jsx("div", { style: { color: '#ef4444', fontSize: 13 }, children: error }) : null, _jsxs("div", { className: "grid", children: [loadingDash ? (_jsx("div", { className: "span-12", children: _jsx(Card, { children: _jsx("div", { style: { padding: 18 }, children: _jsx(Spinner, {}) }) }) })) : null, !loadingDash && definition ? (widgetList.map((w) => {
+                                        ] }), preset === 'custom' ? (_jsxs(_Fragment, { children: [_jsx(Input, { type: "date", value: customStart, onChange: (e) => setCustomStart(e.target.value) }), _jsx(Input, { type: "date", value: customEnd, onChange: (e) => setCustomEnd(e.target.value) })] })) : null, _jsx(Button, { onClick: () => queryMetrics(), disabled: loadingDash, children: "Refresh" }), definition && definition.canEdit ? (_jsx(Button, { variant: "secondary", onClick: openShares, children: "Share" })) : null] })] }), _jsx("div", { className: "subtitle", children: definition?.description || '—' }), error ? _jsx("div", { style: { color: '#ef4444', fontSize: 13 }, children: error }) : null, _jsxs("div", { className: "grid", children: [loadingDash ? (_jsx("div", { className: "span-12", children: _jsx(Card, { children: _jsx("div", { style: { padding: 18 }, children: _jsx(Spinner, {}) }) }) })) : null, !loadingDash && definition ? (widgetList.map((w) => {
                                 const grid = w.grid || {};
                                 const span = typeof grid.w === 'number' ? grid.w : (w.kind === 'kpi' ? 3 : w.kind === 'pie' ? 6 : 12);
                                 const spanClass = span === 12 ? 'span-12' : span === 6 ? 'span-6' : span === 4 ? 'span-4' : 'span-3';

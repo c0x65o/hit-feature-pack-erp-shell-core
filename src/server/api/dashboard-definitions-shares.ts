@@ -49,6 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: { key: str
         s.id,
         s.principal_type as "principalType",
         s.principal_id as "principalId",
+        coalesce(s.permission, 'view') as "permission",
         s.shared_by as "sharedBy",
         s.shared_by_name as "sharedByName",
         s.created_at as "createdAt"
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: { key: str
 
 /**
  * POST: add share entry
- * Body: { principalType: 'user' | 'group' | 'role', principalId: string }
+ * Body: { principalType: 'user' | 'group' | 'role', principalId: string, permission?: 'view' | 'full' }
  */
 export async function POST(request: NextRequest, { params }: { params: { key: string } }) {
   try {
@@ -79,6 +80,8 @@ export async function POST(request: NextRequest, { params }: { params: { key: st
     const body = await request.json().catch(() => ({}));
     const principalType = String(body?.principalType || '').trim();
     const principalId = String(body?.principalId || '').trim();
+    const permissionRaw = String(body?.permission || 'view').trim().toLowerCase();
+    const permission = permissionRaw === 'full' ? 'full' : 'view';
 
     if (!principalType || !principalId) {
       return NextResponse.json({ error: 'principalType and principalId are required' }, { status: 400 });
@@ -101,13 +104,14 @@ export async function POST(request: NextRequest, { params }: { params: { key: st
       return NextResponse.json({ error: 'Cannot share with yourself' }, { status: 400 });
     }
 
-    // Insert (idempotent)
+    // Insert or update permission on conflict
     const res = await db.execute(sql`
       insert into "dashboard_definition_shares" (
         id,
         dashboard_id,
         principal_type,
         principal_id,
+        permission,
         shared_by,
         shared_by_name,
         created_at
@@ -116,22 +120,26 @@ export async function POST(request: NextRequest, { params }: { params: { key: st
         ${dash.id},
         ${principalType},
         ${principalId},
+        ${permission},
         ${user.sub},
         ${user.name || user.email || user.sub},
         now()
       )
-      on conflict ("dashboard_id","principal_type","principal_id") do nothing
+      on conflict ("dashboard_id","principal_type","principal_id") do update set
+        permission = ${permission},
+        shared_by = ${user.sub},
+        shared_by_name = ${user.name || user.email || user.sub}
       returning
         id,
         principal_type as "principalType",
         principal_id as "principalId",
+        permission,
         shared_by as "sharedBy",
         shared_by_name as "sharedByName",
         created_at as "createdAt"
     `);
 
     const row = ((res as any).rows || [])[0];
-    if (!row) return NextResponse.json({ error: 'Already shared' }, { status: 409 });
     return NextResponse.json({ data: row });
   } catch (error: any) {
     console.error('Failed to add dashboard share:', error);

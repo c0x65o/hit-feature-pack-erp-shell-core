@@ -636,6 +636,18 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             enumValues: [string, ...string[]];
             baseColumn: never;
         }, {}, {}>;
+        permission: import("drizzle-orm/pg-core").PgColumn<{
+            name: "permission";
+            tableName: "dashboard_definition_shares";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+        }, {}, {}>;
         sharedBy: import("drizzle-orm/pg-core").PgColumn<{
             name: "shared_by";
             tableName: "dashboard_definition_shares";

@@ -209,6 +209,7 @@ export const dashboardDefinitionShares = pgTable(
       .notNull(),
     principalType: varchar('principal_type', { length: 16 }).notNull(), // user | group | role
     principalId: varchar('principal_id', { length: 255 }).notNull(),
+    permission: varchar('permission', { length: 16 }).notNull().default('view'), // view | full
     sharedBy: varchar('shared_by', { length: 255 }).notNull(),
     sharedByName: varchar('shared_by_name', { length: 255 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),

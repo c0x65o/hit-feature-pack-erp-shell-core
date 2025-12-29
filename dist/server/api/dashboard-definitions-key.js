@@ -47,7 +47,30 @@ export async function GET(request, { params }) {
         d.scope,
         d.version,
         d.definition,
-        d.updated_at as "updatedAt"
+        d.updated_at as "updatedAt",
+        (d.owner_user_id = ${user.sub}) as "isOwner",
+        exists (
+          select 1 from "dashboard_definition_shares" s
+          where s.dashboard_id = d.id
+            and (
+              (s.principal_type = 'user' and s.principal_id = ${user.sub})
+              ${userGroups.length ? sql `or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql `, `)}))` : sql ``}
+              ${userRoles.length ? sql `or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql `, `)}))` : sql ``}
+            )
+        ) as "isShared",
+        (
+          d.owner_user_id = ${user.sub}
+          or exists (
+            select 1 from "dashboard_definition_shares" s
+            where s.dashboard_id = d.id
+              and s.permission = 'full'
+              and (
+                (s.principal_type = 'user' and s.principal_id = ${user.sub})
+                ${userGroups.length ? sql `or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql `, `)}))` : sql ``}
+                ${userRoles.length ? sql `or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql `, `)}))` : sql ``}
+              )
+          )
+        ) as "canEdit"
       from "dashboard_definitions" d
       where d.key = ${key}
       limit 1
@@ -55,17 +78,7 @@ export async function GET(request, { params }) {
         const row = (result.rows || [])[0];
         if (!row)
             return NextResponse.json({ error: 'Dashboard not found' }, { status: 404 });
-        const canRead = row.visibility === 'public' || row.ownerUserId === user.sub || (await (async () => {
-            // Evaluate sharedAccess via a tiny SQL to keep logic consistent
-            const check = await db.execute(sql `
-          select 1 as ok
-          from "dashboard_definitions" d
-          where d.id = ${row.id}
-            and (${sharedAccess})
-          limit 1
-        `);
-            return Boolean((check.rows || [])[0]);
-        })());
+        const canRead = row.visibility === 'public' || row.isOwner || row.isShared;
         if (!canRead)
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         return NextResponse.json({ data: row });
@@ -124,6 +137,10 @@ export async function PUT(request, { params }) {
         const db = getDb();
         const body = await request.json().catch(() => ({}));
         const isAdmin = user.roles?.includes('admin') || false;
+        const userGroups = user.roles || [];
+        const userRoles = user.roles || [];
+        const groupList = userGroups.map((g) => sql `${g}`);
+        const roleList = userRoles.map((r) => sql `${r}`);
         const existingRes = await db.execute(sql `
       select
         d.id,
@@ -135,7 +152,18 @@ export async function PUT(request, { params }) {
         d.description,
         d.scope,
         d.version,
-        d.definition
+        d.definition,
+        (d.owner_user_id = ${user.sub}) as "isOwner",
+        exists (
+          select 1 from "dashboard_definition_shares" s
+          where s.dashboard_id = d.id
+            and s.permission = 'full'
+            and (
+              (s.principal_type = 'user' and s.principal_id = ${user.sub})
+              ${userGroups.length ? sql `or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql `, `)}))` : sql ``}
+              ${userRoles.length ? sql `or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql `, `)}))` : sql ``}
+            )
+        ) as "hasFullShare"
       from "dashboard_definitions" d
       where d.key = ${key}
       limit 1
@@ -145,7 +173,7 @@ export async function PUT(request, { params }) {
             return NextResponse.json({ error: 'Dashboard not found' }, { status: 404 });
         if (existing.isSystem)
             return NextResponse.json({ error: 'System dashboards cannot be updated. Copy it first.' }, { status: 403 });
-        const canEdit = existing.ownerUserId === user.sub || isAdmin;
+        const canEdit = existing.isOwner || existing.hasFullShare || isAdmin;
         if (!canEdit)
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         const nextName = body?.name !== undefined ? String(body?.name || '').trim() : undefined;

@@ -108,6 +108,9 @@ type DashboardListItem = {
   isSystem: boolean;
   ownerUserId: string;
   shareCount: number;
+  isOwner: boolean;
+  isShared: boolean;
+  canEdit: boolean;
 };
 
 type DashboardDefinition = {
@@ -121,6 +124,9 @@ type DashboardDefinition = {
   ownerUserId: string;
   version: number;
   definition: any;
+  isOwner: boolean;
+  isShared: boolean;
+  canEdit: boolean;
 };
 
 type MetricCatalogItem = {
@@ -149,6 +155,7 @@ type ShareRow = {
   id: string;
   principalType: 'user' | 'group' | 'role';
   principalId: string;
+  permission: 'view' | 'full';
   sharedBy: string;
   sharedByName: string | null;
   createdAt: string;
@@ -876,7 +883,9 @@ export function Dashboards() {
       setList(items);
 
       const fromUrl = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('key') || '').trim() : '';
-      const pick = fromUrl || items[0]?.key || '';
+      // Only use the key from URL if it exists in the current pack's dashboard list
+      const validFromUrl = fromUrl && items.some((item) => item.key === fromUrl) ? fromUrl : '';
+      const pick = validFromUrl || items[0]?.key || '';
       setSelectedKey((prev) => prev || pick);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1694,7 +1703,14 @@ export function Dashboards() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <strong>{definition?.name || 'Dashboard'}</strong>
               {pack ? <Badge variant="info">pack: {pack}</Badge> : <Badge variant="info">global</Badge>}
-              {definition?.visibility ? <Badge variant="default">{definition.visibility}</Badge> : null}
+              {/* Ownership/sharing badge */}
+              {definition?.isOwner ? (
+                <Badge variant="success">yours</Badge>
+              ) : definition?.isShared ? (
+                <Badge variant="warning">shared</Badge>
+              ) : definition?.visibility === 'public' ? (
+                <Badge variant="default">public</Badge>
+              ) : null}
               {scopeSegmentKey ? (
                 <Badge variant="info">
                   segment: {scopeSegmentKey}
@@ -1717,11 +1733,15 @@ export function Dashboards() {
               <Dropdown
                 align="right"
                 trigger={<Button variant="secondary">Switch</Button>}
-                items={list.map((d) => ({
-                  label: d.key === selectedKey ? `${d.name} (current)` : d.name,
-                  disabled: d.key === selectedKey,
-                  onClick: () => setSelectedKey(d.key),
-                }))}
+                items={list.map((d) => {
+                  const suffix = d.isOwner ? ' (yours)' : d.isShared ? ' (shared)' : d.visibility === 'public' ? ' (public)' : '';
+                  const current = d.key === selectedKey ? ' ✓' : '';
+                  return {
+                    label: `${d.name}${suffix}${current}`,
+                    disabled: d.key === selectedKey,
+                    onClick: () => setSelectedKey(d.key),
+                  };
+                })}
               />
             ) : null}
 
@@ -1762,8 +1782,9 @@ export function Dashboards() {
             <Button onClick={() => queryMetrics()} disabled={loadingDash}>
               Refresh
             </Button>
-            {definition ? (
-              <Button variant="secondary" onClick={openShares} disabled={!definition}>
+            {/* Only show Share button if user can edit (owner or full share permission) */}
+            {definition && definition.canEdit ? (
+              <Button variant="secondary" onClick={openShares}>
                 Share
               </Button>
             ) : null}

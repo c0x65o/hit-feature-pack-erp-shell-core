@@ -76,7 +76,30 @@ export async function GET(request: NextRequest) {
         d.scope,
         d.version,
         d.updated_at as "updatedAt",
-        (select count(*)::int from "dashboard_definition_shares" s where s.dashboard_id = d.id) as "shareCount"
+        (select count(*)::int from "dashboard_definition_shares" s where s.dashboard_id = d.id) as "shareCount",
+        (d.owner_user_id = ${user.sub}) as "isOwner",
+        exists (
+          select 1 from "dashboard_definition_shares" s
+          where s.dashboard_id = d.id
+            and (
+              (s.principal_type = 'user' and s.principal_id = ${user.sub})
+              ${userGroups.length ? sql`or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql`, `)}))` : sql``}
+              ${userRoles.length ? sql`or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql`, `)}))` : sql``}
+            )
+        ) as "isShared",
+        (
+          d.owner_user_id = ${user.sub}
+          or exists (
+            select 1 from "dashboard_definition_shares" s
+            where s.dashboard_id = d.id
+              and s.permission = 'full'
+              and (
+                (s.principal_type = 'user' and s.principal_id = ${user.sub})
+                ${userGroups.length ? sql`or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql`, `)}))` : sql``}
+                ${userRoles.length ? sql`or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql`, `)}))` : sql``}
+              )
+          )
+        ) as "canEdit"
       from "dashboard_definitions" d
       where
         ${scopeFilter}
