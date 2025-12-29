@@ -8,6 +8,9 @@ import crypto from 'node:crypto';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Re-export schema(s) from a schema-only module so capability generation can import them safely.
+export { postBodySchema } from './dashboard-definitions.schema';
+
 /**
  * GET /api/dashboard-definitions?pack=projects&includeGlobal=true
  *

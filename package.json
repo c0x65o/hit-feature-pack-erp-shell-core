@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-dashboard-shell",
-  "version": "1.0.95",
+  "version": "1.0.96",
   "description": "Dashboard shell with sidebar, topbar, notifications, theme support, ERP UI kit, and table views",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -51,6 +51,9 @@
     "react-dom": "^18.0.0",
     "react-grid-layout": "^1.4.4",
     "react-resizable": "^3.0.5"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@hit/ui-kit": "file:../hit-ui-kit",

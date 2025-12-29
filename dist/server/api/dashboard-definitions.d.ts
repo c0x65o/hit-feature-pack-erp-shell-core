@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 export declare const dynamic = "force-dynamic";
 export declare const runtime = "nodejs";
+export { postBodySchema } from './dashboard-definitions.schema';
 /**
  * GET /api/dashboard-definitions?pack=projects&includeGlobal=true
  *
