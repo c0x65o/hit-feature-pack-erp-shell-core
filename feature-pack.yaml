@@ -51,6 +51,17 @@ api:
       handler: "@hit/feature-pack-dashboard-shell/server/api/table-views-shares"
       description: "List, add, or remove share entries for a view"
 
+    # Generic table data helpers (config-driven providers)
+    - path: /api/table-data/batch
+      methods: [POST]
+      handler: "@hit/feature-pack-dashboard-shell/server/api/table-data-batch"
+      description: "Fetch table rows by ids for a given tableId (uses provider registry)"
+
+    - path: /api/table-data/grouped-buckets
+      methods: [POST]
+      handler: "@hit/feature-pack-dashboard-shell/server/api/table-data-grouped-buckets"
+      description: "Fetch grouped rows for a segment bucket column (tableId+columnKey) via metrics-core + providers"
+
     # Dashboards v0 (view-only) — DB-backed definitions + ACL shares
     - path: /api/dashboard-definitions
       methods: [GET, POST]
