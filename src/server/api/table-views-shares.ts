@@ -118,7 +118,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Cannot share with yourself
-    if (principalType === 'user' && principalId === user.sub) {
+    const userEmail = String(user.email || '').trim();
+    if (principalType === 'user' && (principalId === user.sub || (userEmail && principalId === userEmail))) {
       return NextResponse.json({ error: 'Cannot share a view with yourself' }, { status: 400 });
     }
 

@@ -59,11 +59,14 @@ export async function GET(request: NextRequest) {
     
     const shareConditions = [
       // Direct user share
-      and(
-        eq(tableViewShares.principalType, 'user'),
-        eq(tableViewShares.principalId, user.sub)
-      ),
+      and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, user.sub)),
     ];
+
+    // Also match user shares by email (UI uses email as the principal id for "user")
+    const userEmail = String(user.email || '').trim();
+    if (userEmail && userEmail !== user.sub) {
+      shareConditions.push(and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, userEmail)));
+    }
     
     // Add group shares if user has groups
     if (userGroups.length > 0) {
