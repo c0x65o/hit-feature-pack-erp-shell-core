@@ -16,6 +16,10 @@ export declare const runtime = "nodejs";
  *
  * NOTE: This endpoint is intentionally "glue": it combines bucket membership from metrics-core
  * with row fetching from /api/table-data/batch (provider registry).
+ *
+ * IMPORTANT:
+ * - For per-row bucket values, metrics-core uses first-match-wins (exclusive buckets) ordering by sortOrder.
+ * - For server-side grouping, we align with that behavior by using the evaluate endpoint and grouping IDs.
  */
 export declare function POST(request: NextRequest): Promise<NextResponse<{
     error: string;

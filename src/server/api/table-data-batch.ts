@@ -19,6 +19,25 @@ function requireAdmin(request: NextRequest) {
   return { ok: true as const };
 }
 
+function toCamelKey(key: string): string {
+  // Convert snake_case -> camelCase. Leave already camel-ish keys alone.
+  if (!key.includes('_')) return key;
+  return key.replace(/_([a-zA-Z0-9])/g, (_, ch: string) => ch.toUpperCase());
+}
+
+function addCamelAliases<T>(row: T): T {
+  if (!row || typeof row !== 'object') return row;
+  if (Array.isArray(row)) return row;
+  const obj = row as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...obj };
+  for (const [k, v] of Object.entries(obj)) {
+    if (!k.includes('_')) continue;
+    const camel = toCamelKey(k);
+    if (camel && !(camel in out)) out[camel] = v;
+  }
+  return out as T;
+}
+
 /**
  * POST /api/table-data/batch
  *
@@ -53,7 +72,11 @@ export async function POST(request: NextRequest) {
   const db = getDb();
   const q = buildDbTableBatchQuery(provider, ids);
   const res = await db.execute(q);
-  const items = Array.isArray((res as any).rows) ? (res as any).rows : [];
+  const rawItems = Array.isArray((res as any).rows) ? (res as any).rows : [];
+  // db_table providers return raw DB column names (often snake_case). Many UI tables
+  // use the Drizzle/TS field naming (camelCase). To keep things plug-and-play,
+  // we add camelCase aliases without removing the original keys.
+  const items = rawItems.map(addCamelAliases);
 
   return NextResponse.json({ data: { items } });
 }
