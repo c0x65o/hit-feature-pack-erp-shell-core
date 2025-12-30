@@ -337,6 +337,56 @@ const Input = ({ label, type = 'text', placeholder, value, onChange, error, disa
     }, error));
 };
 // -----------------------------------------------------------------------------
+// ColorPicker - Standardized swatch + hex input
+// -----------------------------------------------------------------------------
+const ColorPicker = ({ label, value, onChange, placeholder = '#3b82f6', error, disabled, required, className }) => {
+    const shouldFlex = className?.includes('flex-1') || className?.includes('flex-grow');
+    return React.createElement('div', {
+        className,
+        style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            marginBottom: '16px',
+            ...(shouldFlex ? { flex: '1 1 0%', minWidth: 0 } : {}),
+        },
+    }, label && React.createElement('label', {
+        style: {
+            fontSize: '13px',
+            fontWeight: '500',
+            color: colors.text.secondary,
+        },
+    }, label, required && React.createElement('span', { style: { color: colors.error.default, marginLeft: '4px' } }, '*')), React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, React.createElement('input', {
+        type: 'color',
+        value: value || '#000000',
+        onChange: (e) => onChange(e.target.value),
+        disabled,
+        style: {
+            WebkitAppearance: 'none',
+            MozAppearance: 'none',
+            appearance: 'none',
+            boxSizing: 'border-box',
+            margin: 0,
+            width: '60px',
+            height: sizing.inputHeight,
+            padding: '2px',
+            backgroundColor: colors.bg.input,
+            border: `1px solid ${error ? colors.error.default : colors.border.default}`,
+            borderRadius: sizing.borderRadiusSm,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
+            flexShrink: 0,
+        },
+    }), React.createElement(Input, {
+        type: 'text',
+        value,
+        onChange,
+        placeholder,
+        error,
+        disabled,
+    })), error && React.createElement('p', { style: { fontSize: '12px', color: colors.error.default, margin: 0 } }, error));
+};
+// -----------------------------------------------------------------------------
 // TextArea - Consistent with Input styling
 // -----------------------------------------------------------------------------
 const TextArea = ({ label, placeholder, value, onChange, rows = 4, error, disabled, required }) => {
@@ -610,8 +660,9 @@ const Avatar = AvatarComponent;
 // -----------------------------------------------------------------------------
 // Alert - Prominent notifications
 // -----------------------------------------------------------------------------
-const Alert = ({ variant, title, onClose, children }) => {
+const Alert = ({ variant = 'default', title, onClose, children }) => {
     const config = {
+        default: { Icon: Info, bg: colors.bg.muted, border: colors.border.default, color: colors.text.primary },
         success: { Icon: CheckCircle, bg: colors.success.muted, border: colors.success.border, color: colors.success.default },
         warning: { Icon: AlertTriangle, bg: colors.warning.muted, border: colors.warning.border, color: colors.warning.default },
         error: { Icon: AlertCircle, bg: colors.error.muted, border: colors.error.border, color: colors.error.default },
@@ -901,6 +952,7 @@ export const erpKit = {
     Card,
     Button,
     Input,
+    ColorPicker,
     TextArea,
     Select,
     Checkbox,

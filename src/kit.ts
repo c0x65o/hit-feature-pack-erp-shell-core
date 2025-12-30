@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { UiKit, AlertProps, ModalProps, EmptyStateProps, TabsProps, DropdownProps, SelectProps, SelectOption, CheckboxProps, TableProps, TableColumn, BadgeProps, InputProps, TextAreaProps, ButtonProps, PageProps, CardProps } from '@hit/ui-kit';
+import type { UiKit, AlertProps, ModalProps, EmptyStateProps, TabsProps, DropdownProps, SelectProps, SelectOption, CheckboxProps, TableProps, TableColumn, BadgeProps, InputProps, ColorPickerProps, TextAreaProps, ButtonProps, PageProps, CardProps } from '@hit/ui-kit';
 import { Autocomplete, DataTable, AlertDialog, Breadcrumb, Help } from '@hit/ui-kit';
 
 // =============================================================================
@@ -375,6 +375,67 @@ const Input: UiKit['Input'] = ({ label, type = 'text', placeholder, value, onCha
 };
 
 // -----------------------------------------------------------------------------
+// ColorPicker - Standardized swatch + hex input
+// -----------------------------------------------------------------------------
+const ColorPicker: UiKit['ColorPicker'] = ({ label, value, onChange, placeholder = '#3b82f6', error, disabled, required, className }: ColorPickerProps) => {
+  const shouldFlex = className?.includes('flex-1') || className?.includes('flex-grow');
+  return React.createElement('div', {
+    className,
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '6px',
+      marginBottom: '16px',
+      ...(shouldFlex ? { flex: '1 1 0%', minWidth: 0 } : {}),
+    },
+  },
+    label && React.createElement('label', {
+      style: {
+        fontSize: '13px',
+        fontWeight: '500',
+        color: colors.text.secondary,
+      },
+    },
+      label,
+      required && React.createElement('span', { style: { color: colors.error.default, marginLeft: '4px' } }, '*')
+    ),
+    React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+      React.createElement('input', {
+        type: 'color',
+        value: value || '#000000',
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+        disabled,
+        style: {
+          WebkitAppearance: 'none',
+          MozAppearance: 'none',
+          appearance: 'none',
+          boxSizing: 'border-box',
+          margin: 0,
+          width: '60px',
+          height: sizing.inputHeight,
+          padding: '2px',
+          backgroundColor: colors.bg.input,
+          border: `1px solid ${error ? colors.error.default : colors.border.default}`,
+          borderRadius: sizing.borderRadiusSm,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+          flexShrink: 0,
+        },
+      }),
+      React.createElement(Input, {
+        type: 'text',
+        value,
+        onChange,
+        placeholder,
+        error,
+        disabled,
+      })
+    ),
+    error && React.createElement('p', { style: { fontSize: '12px', color: colors.error.default, margin: 0 } }, error)
+  );
+};
+
+// -----------------------------------------------------------------------------
 // TextArea - Consistent with Input styling
 // -----------------------------------------------------------------------------
 const TextArea: UiKit['TextArea'] = ({ label, placeholder, value, onChange, rows = 4, error, disabled, required }: TextAreaProps) => {
@@ -705,8 +766,9 @@ const Avatar = AvatarComponent as UiKit['Avatar'];
 // -----------------------------------------------------------------------------
 // Alert - Prominent notifications
 // -----------------------------------------------------------------------------
-const Alert: UiKit['Alert'] = ({ variant, title, onClose, children }: AlertProps) => {
+const Alert: UiKit['Alert'] = ({ variant = 'default', title, onClose, children }: AlertProps) => {
   const config = {
+    default: { Icon: Info, bg: colors.bg.muted, border: colors.border.default, color: colors.text.primary },
     success: { Icon: CheckCircle, bg: colors.success.muted, border: colors.success.border, color: colors.success.default },
     warning: { Icon: AlertTriangle, bg: colors.warning.muted, border: colors.warning.border, color: colors.warning.default },
     error: { Icon: AlertCircle, bg: colors.error.muted, border: colors.error.border, color: colors.error.default },
@@ -1046,6 +1108,7 @@ export const erpKit: UiKit = {
   Card,
   Button,
   Input,
+  ColorPicker,
   TextArea,
   Select,
   Checkbox,
