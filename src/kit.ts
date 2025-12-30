@@ -3,7 +3,7 @@
 import React from 'react';
 import { X, Loader2, AlertCircle, CheckCircle, AlertTriangle, Info, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { UiKit, AlertProps, ModalProps, EmptyStateProps, TabsProps, DropdownProps, SelectProps, SelectOption, CheckboxProps, TableProps, TableColumn, BadgeProps, InputProps, TextAreaProps, ButtonProps, PageProps, CardProps } from '@hit/ui-kit';
-import { DataTable, AlertDialog, Breadcrumb, Help } from '@hit/ui-kit';
+import { Autocomplete, DataTable, AlertDialog, Breadcrumb, Help } from '@hit/ui-kit';
 
 // =============================================================================
 // ERP DESIGN SYSTEM
@@ -1049,6 +1049,7 @@ export const erpKit: UiKit = {
   TextArea,
   Select,
   Checkbox,
+  Autocomplete,
   Table,
   DataTable,
   Badge,

@@ -6,10 +6,10 @@ export declare const postBodySchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     principalType: "group" | "user" | "role";
     principalId: string;
-    permission: "full" | "view";
+    permission: "view" | "full";
 }, {
     principalType: "group" | "user" | "role";
     principalId: string;
-    permission?: "full" | "view" | undefined;
+    permission?: "view" | "full" | undefined;
 }>;
 //# sourceMappingURL=dashboard-definitions-shares.schema.d.ts.map
