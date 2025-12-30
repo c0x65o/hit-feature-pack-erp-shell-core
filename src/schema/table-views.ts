@@ -159,6 +159,34 @@ export type InsertTableViewFilter = InferInsertModel<typeof tableViewFilters>;
 export type InsertTableViewShare = InferInsertModel<typeof tableViewShares>;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATION READS (server-backed read/unread state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Notification Reads Table
+ *
+ * Stores per-user read state for arbitrary notification IDs.
+ * This is intentionally generic so multiple feature packs can publish into a single feed.
+ */
+export const notificationReads = pgTable(
+  'notification_reads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    notificationId: text('notification_id').notNull(),
+    readAt: timestamp('read_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdx: index('notification_reads_user_id_idx').on(table.userId),
+    userNotifUnique: unique('notification_reads_user_notification_unique').on(table.userId, table.notificationId),
+    readAtIdx: index('notification_reads_read_at_idx').on(table.readAt),
+  })
+);
+
+export type NotificationRead = InferSelectModel<typeof notificationReads>;
+export type InsertNotificationRead = InferInsertModel<typeof notificationReads>;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD DEFINITIONS
 // ─────────────────────────────────────────────────────────────────────────────
 

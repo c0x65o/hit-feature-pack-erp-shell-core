@@ -28,12 +28,19 @@ schema:
     - FILTER_VALUE_TYPES
     - FilterOperator
     - FilterValueType
+    - notificationReads
+    - NotificationRead
+    - InsertNotificationRead
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API ROUTES - Backend endpoints for table views
 # ─────────────────────────────────────────────────────────────────────────────
 api:
   routes:
+    - path: /api/notification-reads
+      methods: [GET, POST]
+      handler: "@hit/feature-pack-dashboard-shell/server/api/notification-reads"
+      description: "Get or upsert notification read state for the current user"
     - path: /api/table-views
       methods: [GET, POST]
       handler: "@hit/feature-pack-dashboard-shell/server/api/table-views"

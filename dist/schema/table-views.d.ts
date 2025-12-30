@@ -426,6 +426,69 @@ export type InsertTableView = InferInsertModel<typeof tableViews>;
 export type InsertTableViewFilter = InferInsertModel<typeof tableViewFilters>;
 export type InsertTableViewShare = InferInsertModel<typeof tableViewShares>;
 /**
+ * Notification Reads Table
+ *
+ * Stores per-user read state for arbitrary notification IDs.
+ * This is intentionally generic so multiple feature packs can publish into a single feed.
+ */
+export declare const notificationReads: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "notification_reads";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "notification_reads";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            enumValues: undefined;
+            baseColumn: never;
+        }, {}, {}>;
+        userId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "user_id";
+            tableName: "notification_reads";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+        }, {}, {}>;
+        notificationId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "notification_id";
+            tableName: "notification_reads";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+        }, {}, {}>;
+        readAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "read_at";
+            tableName: "notification_reads";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            enumValues: undefined;
+            baseColumn: never;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+export type NotificationRead = InferSelectModel<typeof notificationReads>;
+export type InsertNotificationRead = InferInsertModel<typeof notificationReads>;
+/**
  * Dashboard Definitions Table
  * Stores dashboard configurations (layout + widgets) as JSONB
  */
