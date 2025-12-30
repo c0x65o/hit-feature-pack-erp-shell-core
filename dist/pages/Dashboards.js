@@ -642,9 +642,18 @@ export function Dashboards() {
                     const isAutoEntityKind = rawEntityKind === '' || rawEntityKind.toLowerCase() === 'auto';
                     const entityKind = !isAutoEntityKind ? rawEntityKind : '';
                     const onlyWithPoints = pres?.onlyWithPoints === true;
+                    const ownerKind = typeof pres?.owner?.kind === 'string' ? pres.owner.kind.trim().toLowerCase() : '';
+                    const ownerId = typeof pres?.owner?.id === 'string' ? pres.owner.id.trim() : '';
+                    const hasOwnerFilter = Boolean(ownerKind && ownerId);
                     const items = Object.values(catalogMap || {});
                     const filtered = items
                         .filter((it) => {
+                        if (hasOwnerFilter) {
+                            const ik = typeof it?.owner?.kind === 'string' ? String(it.owner.kind).trim().toLowerCase() : '';
+                            const iid = typeof it?.owner?.id === 'string' ? String(it.owner.id).trim() : '';
+                            if (ik !== ownerKind || iid !== ownerId)
+                                return false;
+                        }
                         if (!isAutoEntityKind) {
                             const kinds = Array.isArray(it.entity_kinds) ? it.entity_kinds : [];
                             // If the metric declares supported entity kinds, respect it.
@@ -1268,9 +1277,18 @@ export function Dashboards() {
                                     const isAutoEntityKind = rawEntityKind === '' || rawEntityKind.toLowerCase() === 'auto';
                                     const entityKind = !isAutoEntityKind ? rawEntityKind : '';
                                     const onlyWithPoints = pres?.onlyWithPoints === true;
+                                    const ownerKind = typeof pres?.owner?.kind === 'string' ? pres.owner.kind.trim().toLowerCase() : '';
+                                    const ownerId = typeof pres?.owner?.id === 'string' ? pres.owner.id.trim() : '';
+                                    const hasOwnerFilter = Boolean(ownerKind && ownerId);
                                     const items = Object.values(catalogByKey || {});
                                     const filtered = items
                                         .filter((it) => {
+                                        if (hasOwnerFilter) {
+                                            const ik = typeof it?.owner?.kind === 'string' ? String(it.owner.kind).trim().toLowerCase() : '';
+                                            const iid = typeof it?.owner?.id === 'string' ? String(it.owner.id).trim() : '';
+                                            if (ik !== ownerKind || iid !== ownerId)
+                                                return false;
+                                        }
                                         if (!isAutoEntityKind) {
                                             const kinds = Array.isArray(it.entity_kinds) ? it.entity_kinds : [];
                                             // If the metric declares supported entity kinds, respect it.
