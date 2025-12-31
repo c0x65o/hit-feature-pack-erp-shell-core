@@ -93,6 +93,16 @@ routes:
   - path: /reports/builder
     page: ReportBuilder
     roles: []
+  - path: /error-log
+    page: ErrorLog
+    roles: []
+
+nav:
+  - label: Error Log
+    path: /error-log
+    icon: alert-circle
+    group: system
+    weight: 900
 
 ## Nav entry intentionally omitted for MVP:
 ## dashboards should be discovered from within the Projects feature pack (not global/root).
