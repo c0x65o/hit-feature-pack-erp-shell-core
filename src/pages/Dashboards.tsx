@@ -787,6 +787,13 @@ export function Dashboards() {
     }
   }, []);
 
+  function encodePrefill(obj: any): string {
+    const json = JSON.stringify(obj || {});
+    // base64url to keep URLs readable-ish and safe
+    const b64 = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    return encodeURIComponent(b64);
+  }
+
   const urlParams = React.useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams();
     return new URLSearchParams(window.location.search);
@@ -2057,6 +2064,17 @@ export function Dashboards() {
                     {drillPagination.total.toLocaleString()} points
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
+                    <Button
+                      variant="secondary"
+                      disabled={!drillLastFilter}
+                      onClick={() => {
+                        if (!drillLastFilter) return;
+                        const prefill = encodePrefill({ title: drillTitle, format: drillFormat, pointFilter: drillLastFilter });
+                        window.location.href = `/reports/builder?prefill=${prefill}`;
+                      }}
+                    >
+                      Open in Report Writer
+                    </Button>
                     <Button
                       variant="secondary"
                       disabled={drillLoading || drillPagination.page <= 1 || !drillLastFilter}

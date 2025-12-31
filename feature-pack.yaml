@@ -87,6 +87,12 @@ routes:
   - path: /dashboards
     page: Dashboards
     roles: []
+  - path: /reports
+    page: Reports
+    roles: []
+  - path: /reports/builder
+    page: ReportBuilder
+    roles: []
 
 ## Nav entry intentionally omitted for MVP:
 ## dashboards should be discovered from within the Projects feature pack (not global/root).
