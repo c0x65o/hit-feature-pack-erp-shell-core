@@ -33,6 +33,10 @@ export async function GET(request: NextRequest) {
     const pack = (searchParams.get('pack') || '').trim();
     const includeGlobal = (searchParams.get('includeGlobal') || 'true').toLowerCase() !== 'false';
 
+    // Ensure pack dashboards exist out-of-the-box.
+    // Some environments skip app seeds; this makes dashboards reliably available.
+    await ensureDefaultPackDashboards(db, pack);
+
     const principals = await resolveUserPrincipals({ request, user });
     const userGroups = principals.groupIds || [];
     const userRoles = principals.roles || [];
@@ -119,6 +123,178 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Failed to list dashboard definitions:', error);
     return NextResponse.json({ error: error?.message || 'Failed to list dashboards' }, { status: 500 });
+  }
+}
+
+async function ensureDefaultPackDashboards(db: any, pack: string) {
+  const p = String(pack || '').trim();
+  if (!p) return;
+
+  // Only seed for the packs we want as default business dashboards.
+  if (p !== 'crm' && p !== 'projects') return;
+
+  const now = new Date();
+
+  if (p === 'projects') {
+    const key = 'system.projects_kpi_catalog';
+    const scope = { kind: 'pack', pack: 'projects' };
+    const definition = {
+      time: { mode: 'picker', default: 'last_30_days' },
+      layout: { grid: { cols: 12, rowHeight: 36, gap: 14 } },
+      widgets: [
+        {
+          key: 'kpi_catalog.project_metrics',
+          kind: 'kpi_catalog',
+          title: 'All Metrics (Auto-scoped totals)',
+          grid: { x: 0, y: 0, w: 12, h: 8 },
+          time: 'inherit',
+          presentation: {
+            entityKind: 'auto',
+            owner: { kind: 'feature_pack', id: 'projects' },
+            onlyWithPoints: false,
+          },
+        },
+      ],
+    };
+
+    await db.execute(sql`
+      insert into "dashboard_definitions" (
+        id,
+        key,
+        owner_user_id,
+        is_system,
+        name,
+        description,
+        visibility,
+        scope,
+        version,
+        definition,
+        created_at,
+        updated_at
+      ) values (
+        gen_random_uuid(),
+        ${key},
+        'system',
+        true,
+        'All Project KPIs',
+        'KPI-only dashboard that shows every project-scoped metric (with icons) summed across all projects.',
+        'public',
+        ${JSON.stringify(scope)}::jsonb,
+        0,
+        ${JSON.stringify(definition)}::jsonb,
+        ${now},
+        ${now}
+      )
+      on conflict (key) do update set
+        name = excluded.name,
+        description = excluded.description,
+        visibility = excluded.visibility,
+        scope = excluded.scope,
+        version = excluded.version,
+        definition = excluded.definition,
+        updated_at = excluded.updated_at
+    `);
+  }
+
+  if (p === 'crm') {
+    const key = 'system.crm_overview';
+    const scope = { kind: 'pack', pack: 'crm' };
+    const definition = {
+      time: { mode: 'picker', default: 'last_30_days' },
+      layout: { grid: { cols: 12, rowHeight: 36, gap: 14 } },
+      widgets: [
+        {
+          key: 'kpi.crm.companies',
+          kind: 'kpi',
+          title: 'Companies',
+          grid: { x: 0, y: 0, w: 3, h: 2 },
+          time: 'all_time',
+          presentation: {
+            icon: 'Building',
+            iconColor: '#2563eb',
+            valueSource: { kind: 'api_count', endpoint: '/api/crm/companies', totalField: 'pagination.total' },
+            action: { label: 'View All', href: '/crm/companies' },
+          },
+        },
+        {
+          key: 'kpi.crm.contacts',
+          kind: 'kpi',
+          title: 'Contacts',
+          grid: { x: 3, y: 0, w: 3, h: 2 },
+          time: 'all_time',
+          presentation: {
+            icon: 'User',
+            iconColor: '#16a34a',
+            valueSource: { kind: 'api_count', endpoint: '/api/crm/contacts', totalField: 'pagination.total' },
+            action: { label: 'View All', href: '/crm/contacts' },
+          },
+        },
+        {
+          key: 'kpi.crm.opportunities',
+          kind: 'kpi',
+          title: 'Opportunities',
+          grid: { x: 6, y: 0, w: 3, h: 2 },
+          time: 'all_time',
+          presentation: {
+            icon: 'TrendingUp',
+            iconColor: '#a855f7',
+            valueSource: { kind: 'api_count', endpoint: '/api/crm/opportunities', totalField: 'pagination.total' },
+            action: { label: 'View All', href: '/crm/opportunities' },
+          },
+        },
+        {
+          key: 'kpi.crm.pipeline_total',
+          kind: 'kpi',
+          title: 'Pipeline Value',
+          grid: { x: 9, y: 0, w: 3, h: 2 },
+          time: 'all_time',
+          presentation: {
+            format: 'usd',
+            icon: 'DollarSign',
+            iconColor: '#f59e0b',
+            valueSource: { kind: 'api_value', endpoint: '/api/crm/metrics', valueField: 'pipeline.totalValue' },
+          },
+        },
+      ],
+    };
+
+    await db.execute(sql`
+      insert into "dashboard_definitions" (
+        id,
+        key,
+        owner_user_id,
+        is_system,
+        name,
+        description,
+        visibility,
+        scope,
+        version,
+        definition,
+        created_at,
+        updated_at
+      ) values (
+        gen_random_uuid(),
+        ${key},
+        'system',
+        true,
+        'CRM Overview',
+        'Quick CRM snapshot (counts + pipeline totals).',
+        'public',
+        ${JSON.stringify(scope)}::jsonb,
+        0,
+        ${JSON.stringify(definition)}::jsonb,
+        ${now},
+        ${now}
+      )
+      on conflict (key) do update set
+        name = excluded.name,
+        description = excluded.description,
+        visibility = excluded.visibility,
+        scope = excluded.scope,
+        version = excluded.version,
+        definition = excluded.definition,
+        updated_at = excluded.updated_at
+    `);
   }
 }
 
