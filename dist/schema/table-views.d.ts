@@ -488,7 +488,7 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             tableName: "table_view_shares";
             dataType: "string";
             columnType: "PgEnumColumn";
-            data: "group" | "user" | "role";
+            data: "group" | "role" | "user";
             driverParam: string;
             notNull: true;
             hasDefault: false;

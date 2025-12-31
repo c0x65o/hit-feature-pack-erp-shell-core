@@ -6,7 +6,18 @@
  */
 'use client';
 import { jsx as _jsx } from "react/jsx-runtime";
-import * as LucideIcons from 'lucide-react';
+import { Users, Building, User, TrendingUp, Activity, Settings, Tags, Workflow, Percent, FolderKanban, LayoutDashboard, Clock, Tag, List, Package, ClipboardList, Receipt, Store, Lock, Upload, FileText, CirclePlay, ListChecks, History, Sparkles, ChartBar, BookOpen, Layers, Key, Link2, Filter, MapPin, ShieldCheck, UsersRound, Shield, Mail, Menu, Bell, LogOut, ChevronRight, ChevronDown, Monitor, Moon, Sun, X, RotateCw, Plus, Search, ChevronLeft, ChevronsLeft, ChevronsRight, Eye, EyeOff, Download, RefreshCw, MoreVertical, Edit, Trash, PlusCircle, Check, Calendar, Filter as FilterIcon, ArrowRight, ArrowLeft, ExternalLink, HelpCircle, AlertCircle, CheckCircle, AlertTriangle, Info } from 'lucide-react';
+const LucideIcons = {
+    Users, Building, User, TrendingUp, Activity, Settings, Tags, Workflow, Percent,
+    FolderKanban, LayoutDashboard, Clock, Tag, List, Package, ClipboardList, Receipt,
+    Store, Lock, Upload, FileText, CirclePlay, ListChecks, History, Sparkles, ChartBar,
+    BookOpen, Layers, Key, Link2, Filter, MapPin, ShieldCheck, UsersRound, Shield, Mail,
+    Menu, Bell, LogOut, ChevronRight, ChevronDown, Monitor, Moon, Sun, X, RotateCw,
+    Plus, Search, ChevronLeft, ChevronsLeft, ChevronsRight, Eye, EyeOff, Download,
+    RefreshCw, MoreVertical, Edit, Trash, PlusCircle, Check, Calendar,
+    FilterIcon, ArrowRight, ArrowLeft, ExternalLink, HelpCircle,
+    AlertCircle, CheckCircle, AlertTriangle, Info
+};
 function toPascalFromKebab(name) {
     return String(name || '')
         .trim()
