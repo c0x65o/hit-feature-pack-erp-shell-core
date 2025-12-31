@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-dashboard-shell",
-  "version": "1.0.118",
+  "version": "1.0.119",
   "description": "Dashboard shell with sidebar, topbar, notifications, theme support, ERP UI kit, and table views",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -55,7 +55,7 @@
     "react-resizable": "^3.0.5"
   },
   "dependencies": {
-    "zod": "^4.2.1"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@hit/acl-utils": "github:c0x65o/hit-acl-utils#cfa9481d9da5b1a73642efc56fa3ca76cb6b7cac",
