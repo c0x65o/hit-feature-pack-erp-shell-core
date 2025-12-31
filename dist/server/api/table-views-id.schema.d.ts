@@ -11,14 +11,14 @@ export declare const putBodySchema: z.ZodObject<{
     }, "strip", z.ZodTypeAny, {
         operator: string;
         field: string;
-        value?: any;
         metadata?: any;
+        value?: any;
         valueType?: string | null | undefined;
     }, {
         operator: string;
         field: string;
-        value?: any;
         metadata?: any;
+        value?: any;
         valueType?: string | null | undefined;
     }>, "many">>;
     columnVisibility: z.ZodOptional<z.ZodNullable<z.ZodAny>>;
@@ -37,8 +37,8 @@ export declare const putBodySchema: z.ZodObject<{
     filters?: {
         operator: string;
         field: string;
-        value?: any;
         metadata?: any;
+        value?: any;
         valueType?: string | null | undefined;
     }[] | undefined;
 }, {
@@ -52,8 +52,8 @@ export declare const putBodySchema: z.ZodObject<{
     filters?: {
         operator: string;
         field: string;
-        value?: any;
         metadata?: any;
+        value?: any;
         valueType?: string | null | undefined;
     }[] | undefined;
 }>;

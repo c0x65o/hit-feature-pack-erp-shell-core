@@ -29,13 +29,13 @@ export declare const postBodySchema: z.ZodObject<{
     visibility?: "public" | "private" | undefined;
     key?: string | undefined;
     description?: string | undefined;
-    definition?: Record<string, any> | undefined;
     scope?: {
         kind: "global";
     } | {
         pack: string;
         kind: "pack";
     } | undefined;
+    definition?: Record<string, any> | undefined;
     sourceKey?: string | undefined;
 }, {
     name: string;
@@ -43,13 +43,13 @@ export declare const postBodySchema: z.ZodObject<{
     visibility?: "public" | "private" | undefined;
     key?: string | undefined;
     description?: string | undefined;
-    definition?: Record<string, any> | undefined;
     scope?: {
         kind: "global";
     } | {
         pack: string;
         kind: "pack";
     } | undefined;
+    definition?: Record<string, any> | undefined;
     sourceKey?: string | undefined;
 }>;
 export declare const getQuerySchema: z.ZodObject<{

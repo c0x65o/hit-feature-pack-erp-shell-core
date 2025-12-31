@@ -32,8 +32,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         userId: import("drizzle-orm/pg-core").PgColumn<{
             name: "user_id";
@@ -44,9 +49,16 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         tableId: import("drizzle-orm/pg-core").PgColumn<{
             name: "table_id";
             tableName: "table_views";
@@ -56,9 +68,16 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         name: import("drizzle-orm/pg-core").PgColumn<{
             name: "name";
             tableName: "table_views";
@@ -68,9 +87,16 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         isDefault: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_default";
             tableName: "table_views";
@@ -80,8 +106,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: boolean;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         isSystem: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_system";
@@ -92,8 +123,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: boolean;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         isShared: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_shared";
@@ -104,8 +140,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: boolean;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         columnVisibility: import("drizzle-orm/pg-core").PgColumn<{
             name: "column_visibility";
@@ -116,8 +157,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: unknown;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         sorting: import("drizzle-orm/pg-core").PgColumn<{
             name: "sorting";
@@ -128,8 +174,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: unknown;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         groupBy: import("drizzle-orm/pg-core").PgColumn<{
             name: "group_by";
@@ -140,8 +191,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: unknown;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         description: import("drizzle-orm/pg-core").PgColumn<{
             name: "description";
@@ -152,8 +208,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         metadata: import("drizzle-orm/pg-core").PgColumn<{
             name: "metadata";
@@ -164,8 +225,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: unknown;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
@@ -176,8 +242,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
@@ -188,8 +259,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         lastUsedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "last_used_at";
@@ -200,8 +276,13 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
     };
     dialect: "pg";
@@ -223,8 +304,13 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         viewId: import("drizzle-orm/pg-core").PgColumn<{
             name: "view_id";
@@ -235,8 +321,13 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         field: import("drizzle-orm/pg-core").PgColumn<{
             name: "field";
@@ -247,9 +338,16 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         operator: import("drizzle-orm/pg-core").PgColumn<{
             name: "operator";
             tableName: "table_view_filters";
@@ -259,9 +357,16 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 50;
+        }>;
         value: import("drizzle-orm/pg-core").PgColumn<{
             name: "value";
             tableName: "table_view_filters";
@@ -271,8 +376,13 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         valueType: import("drizzle-orm/pg-core").PgColumn<{
             name: "value_type";
@@ -283,9 +393,16 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 50;
+        }>;
         metadata: import("drizzle-orm/pg-core").PgColumn<{
             name: "metadata";
             tableName: "table_view_filters";
@@ -295,8 +412,13 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: unknown;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         sortOrder: import("drizzle-orm/pg-core").PgColumn<{
             name: "sort_order";
@@ -307,8 +429,13 @@ export declare const tableViewFilters: import("drizzle-orm/pg-core").PgTableWith
             driverParam: string | number;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
     };
     dialect: "pg";
@@ -331,8 +458,13 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         viewId: import("drizzle-orm/pg-core").PgColumn<{
             name: "view_id";
@@ -343,8 +475,13 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         principalType: import("drizzle-orm/pg-core").PgColumn<{
             name: "principal_type";
@@ -355,8 +492,13 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: ["user", "group", "role"];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         principalId: import("drizzle-orm/pg-core").PgColumn<{
             name: "principal_id";
@@ -367,9 +509,16 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         sharedBy: import("drizzle-orm/pg-core").PgColumn<{
             name: "shared_by";
             tableName: "table_view_shares";
@@ -379,9 +528,16 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         sharedByName: import("drizzle-orm/pg-core").PgColumn<{
             name: "shared_by_name";
             tableName: "table_view_shares";
@@ -391,9 +547,16 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "table_view_shares";
@@ -403,8 +566,13 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
     };
     dialect: "pg";
@@ -444,8 +612,13 @@ export declare const notificationReads: import("drizzle-orm/pg-core").PgTableWit
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         userId: import("drizzle-orm/pg-core").PgColumn<{
             name: "user_id";
@@ -456,9 +629,16 @@ export declare const notificationReads: import("drizzle-orm/pg-core").PgTableWit
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         notificationId: import("drizzle-orm/pg-core").PgColumn<{
             name: "notification_id";
             tableName: "notification_reads";
@@ -468,8 +648,13 @@ export declare const notificationReads: import("drizzle-orm/pg-core").PgTableWit
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         readAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "read_at";
@@ -480,8 +665,13 @@ export declare const notificationReads: import("drizzle-orm/pg-core").PgTableWit
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
     };
     dialect: "pg";
@@ -505,8 +695,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         key: import("drizzle-orm/pg-core").PgColumn<{
             name: "key";
@@ -517,8 +712,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         ownerUserId: import("drizzle-orm/pg-core").PgColumn<{
             name: "owner_user_id";
@@ -529,9 +729,16 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         isSystem: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_system";
             tableName: "dashboard_definitions";
@@ -541,8 +748,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: boolean;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         name: import("drizzle-orm/pg-core").PgColumn<{
             name: "name";
@@ -553,8 +765,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         description: import("drizzle-orm/pg-core").PgColumn<{
             name: "description";
@@ -565,8 +782,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         visibility: import("drizzle-orm/pg-core").PgColumn<{
             name: "visibility";
@@ -577,9 +799,16 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
         scope: import("drizzle-orm/pg-core").PgColumn<{
             name: "scope";
             tableName: "dashboard_definitions";
@@ -589,8 +818,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: unknown;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         version: import("drizzle-orm/pg-core").PgColumn<{
             name: "version";
@@ -601,8 +835,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string | number;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         definition: import("drizzle-orm/pg-core").PgColumn<{
             name: "definition";
@@ -613,8 +852,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: unknown;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
@@ -625,8 +869,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
@@ -637,8 +886,13 @@ export declare const dashboardDefinitions: import("drizzle-orm/pg-core").PgTable
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
     };
     dialect: "pg";
@@ -660,8 +914,13 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         dashboardId: import("drizzle-orm/pg-core").PgColumn<{
             name: "dashboard_id";
@@ -672,8 +931,13 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
         principalType: import("drizzle-orm/pg-core").PgColumn<{
             name: "principal_type";
@@ -684,9 +948,16 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
         principalId: import("drizzle-orm/pg-core").PgColumn<{
             name: "principal_id";
             tableName: "dashboard_definition_shares";
@@ -696,9 +967,16 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         permission: import("drizzle-orm/pg-core").PgColumn<{
             name: "permission";
             tableName: "dashboard_definition_shares";
@@ -708,9 +986,16 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
         sharedBy: import("drizzle-orm/pg-core").PgColumn<{
             name: "shared_by";
             tableName: "dashboard_definition_shares";
@@ -720,9 +1005,16 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         sharedByName: import("drizzle-orm/pg-core").PgColumn<{
             name: "shared_by_name";
             tableName: "dashboard_definition_shares";
@@ -732,9 +1024,16 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
             baseColumn: never;
-        }, {}, {}>;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "dashboard_definition_shares";
@@ -744,8 +1043,13 @@ export declare const dashboardDefinitionShares: import("drizzle-orm/pg-core").Pg
             driverParam: string;
             notNull: true;
             hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
             enumValues: undefined;
             baseColumn: never;
+            identity: undefined;
+            generated: undefined;
         }, {}, {}>;
     };
     dialect: "pg";
