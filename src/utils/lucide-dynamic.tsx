@@ -1,96 +1,13 @@
 /**
  * Dynamic Lucide icon resolver using wildcard import.
  * 
- * Performance testing showed minimal difference between wildcard and strict imports,
- * so we use wildcard for simplicity and flexibility.
+ * Uses `import * as LucideIcons` to allow any icon to be resolved dynamically
+ * by name from nav configs without needing an explicit allowlist.
  */
 'use client';
 
 import React from 'react';
-import { 
-  Users, 
-  Building, 
-  User, 
-  TrendingUp, 
-  Activity, 
-  Settings, 
-  Tags, 
-  Workflow, 
-  Percent, 
-  FolderKanban, 
-  LayoutDashboard, 
-  Clock, 
-  Tag, 
-  List, 
-  Package, 
-  ClipboardList, 
-  Receipt, 
-  Store, 
-  Lock, 
-  Upload, 
-  FileText, 
-  CirclePlay, 
-  ListChecks, 
-  History, 
-  Sparkles, 
-  ChartBar, 
-  BookOpen, 
-  Layers, 
-  Key, 
-  Link2, 
-  Filter, 
-  MapPin, 
-  ShieldCheck, 
-  UsersRound, 
-  Shield, 
-  Mail,
-  Menu,
-  Bell,
-  LogOut,
-  ChevronRight,
-  ChevronDown,
-  Monitor,
-  Moon,
-  Sun,
-  X,
-  RotateCw,
-  Plus,
-  Search,
-  ChevronLeft,
-  ChevronsLeft,
-  ChevronsRight,
-  Eye,
-  EyeOff,
-  Download,
-  RefreshCw,
-  MoreVertical,
-  Edit,
-  Trash,
-  PlusCircle,
-  Check,
-  Calendar,
-  Filter as FilterIcon,
-  ArrowRight,
-  ArrowLeft,
-  ExternalLink,
-  HelpCircle,
-  AlertCircle,
-  CheckCircle,
-  AlertTriangle,
-  Info
-} from 'lucide-react';
-
-const LucideIcons: Record<string, LucideIconComponent> = { 
-  Users, Building, User, TrendingUp, Activity, Settings, Tags, Workflow, Percent, 
-  FolderKanban, LayoutDashboard, Clock, Tag, List, Package, ClipboardList, Receipt, 
-  Store, Lock, Upload, FileText, CirclePlay, ListChecks, History, Sparkles, ChartBar, 
-  BookOpen, Layers, Key, Link2, Filter, MapPin, ShieldCheck, UsersRound, Shield, Mail,
-  Menu, Bell, LogOut, ChevronRight, ChevronDown, Monitor, Moon, Sun, X, RotateCw,
-  Plus, Search, ChevronLeft, ChevronsLeft, ChevronsRight, Eye, EyeOff, Download, 
-  RefreshCw, MoreVertical, Edit, Trash, PlusCircle, Check, Calendar, 
-  FilterIcon, ArrowRight, ArrowLeft, ExternalLink, HelpCircle,
-  AlertCircle, CheckCircle, AlertTriangle, Info
-};
+import * as LucideIcons from 'lucide-react';
 
 type LucideIconComponent = React.ComponentType<{
   size?: number | string;
