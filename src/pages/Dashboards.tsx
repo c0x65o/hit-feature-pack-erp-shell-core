@@ -705,7 +705,12 @@ function MultiLineChart({
   );
 }
 
-export function Dashboards() {
+interface DashboardsProps {
+  onNavigate?: (path: string) => void;
+  [key: string]: any; // Allow other props to be passed but ignore them
+}
+
+export function Dashboards(_props: DashboardsProps = {}) {
   const { Page, Card, Button, Dropdown, Select, Input, Modal, Spinner, Badge } = useUi();
   const { colors, radius } = useThemeTokens();
 
