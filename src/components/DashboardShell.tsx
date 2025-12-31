@@ -187,6 +187,72 @@ function filterNavByRoles(
     });
 }
 
+function flattenNavPaths(items: NavItem[]): string[] {
+  const out: string[] = [];
+  const walk = (xs: NavItem[]) => {
+    for (const x of xs) {
+      if (x?.path) out.push(String(x.path));
+      const kids = x.children as unknown as NavItem[] | undefined;
+      if (kids && kids.length > 0) walk(kids);
+    }
+  };
+  walk(items || []);
+  return Array.from(new Set(out.filter(Boolean)));
+}
+
+function filterNavByPagePermissions(items: NavItem[], allowedByPath: Record<string, boolean>): NavItem[] {
+  const allowed = (p: string | undefined) => (p ? Boolean(allowedByPath[String(p)]) : false);
+  const walk = (xs: NavItem[]): NavItem[] => {
+    return (xs || [])
+      .map((item) => {
+        const kids = item.children as unknown as NavItem[] | undefined;
+        const nextKids = kids ? walk(kids) : [];
+
+        // Keep item if:
+        // - its own path is allowed, OR
+        // - it has any allowed children (so parent container stays visible)
+        const keep = allowed(item.path) || nextKids.length > 0;
+        if (!keep) return null;
+
+        return {
+          ...item,
+          children: nextKids.length > 0 ? nextKids : undefined,
+        } as NavItem;
+      })
+      .filter(Boolean) as NavItem[];
+  };
+  return walk(items);
+}
+
+async function checkPagePermissionsBatch(pagePaths: string[]): Promise<Record<string, boolean>> {
+  const token = getStoredToken();
+  if (!token) return Object.fromEntries((pagePaths || []).map((p) => [p, false]));
+  if (!pagePaths || pagePaths.length === 0) return {};
+
+  try {
+    const res = await fetch(`/api/proxy/auth/permissions/pages/check-batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: 'include',
+      body: JSON.stringify(pagePaths),
+    });
+    if (!res.ok) return Object.fromEntries((pagePaths || []).map((p) => [p, false]));
+    const json = await res.json().catch(() => ({}));
+    // Expect { [path]: boolean }
+    if (!json || typeof json !== 'object') {
+      return Object.fromEntries((pagePaths || []).map((p) => [p, false]));
+    }
+    const out: Record<string, boolean> = {};
+    for (const p of pagePaths) out[p] = Boolean((json as any)[p]);
+    return out;
+  } catch {
+    return Object.fromEntries((pagePaths || []).map((p) => [p, false]));
+  }
+}
+
 // =============================================================================
 // NAV ITEM COMPONENT
 // =============================================================================
@@ -1361,9 +1427,39 @@ function ShellContent({
   const COLLAPSED_RAIL_WIDTH = '64px';
   const EXPANDED_SIDEBAR_WIDTH = '280px';
 
-  // Get all nav items for collapsed rail
-  const filteredNavItems = filterNavByRoles(navItems, currentUser?.roles);
-  const groupedNavItems = groupNavItems(filteredNavItems);
+  const [pagePermsLoading, setPagePermsLoading] = useState(false);
+  const [allowedByPath, setAllowedByPath] = useState<Record<string, boolean>>({});
+
+  // Compute role-filtered nav, then permission-filter (batched)
+  const roleFilteredNav = filterNavByRoles(navItems, currentUser?.roles);
+
+  useEffect(() => {
+    let cancelled = false;
+    const paths = flattenNavPaths(roleFilteredNav);
+    // Fail-closed while loading to avoid showing links that will 403.
+    setPagePermsLoading(true);
+    setAllowedByPath({});
+
+    checkPagePermissionsBatch(paths)
+      .then((m) => {
+        if (cancelled) return;
+        setAllowedByPath(m || {});
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPagePermsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.email, currentUser?.roles, navItems]); // navItems can change due to runtime injections
+
+  const permissionFilteredNav = pagePermsLoading
+    ? ([] as NavItem[])
+    : filterNavByPagePermissions(roleFilteredNav, allowedByPath);
+
+  const groupedNavItems = groupNavItems(permissionFilteredNav);
   // Flatten all items for the collapsed rail
   const allFlatNavItems = groupedNavItems.flatMap(group => group.items);
 
