@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-dashboard-shell",
-  "version": "1.0.139",
+  "version": "1.0.140",
   "description": "Dashboard shell with sidebar, topbar, notifications, theme support, ERP UI kit, and table views",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -40,6 +40,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "lint": "eslint src --ext .ts,.tsx"
   },
