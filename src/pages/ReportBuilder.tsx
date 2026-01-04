@@ -2,24 +2,7 @@
 
 import React from 'react';
 import { useUi } from '@hit/ui-kit';
-
-function decodePrefill(raw: string): any | null {
-  try {
-    const txt = decodeURIComponent(raw);
-    // base64url-safe-ish
-    const b64 = txt.replace(/-/g, '+').replace(/_/g, '/');
-    const json = atob(b64);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function encodePrefill(obj: any): string {
-  const json = JSON.stringify(obj || {});
-  const b64 = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-  return encodeURIComponent(b64);
-}
+import { decodeReportPrefill, encodeReportPrefill } from '../utils/report-prefill';
 
 export function ReportBuilder() {
   const { Page, Card, Button, Spinner, Badge } = useUi();
@@ -47,11 +30,11 @@ export function ReportBuilder() {
 
     const prefillRaw = sp.get('prefill');
     if (prefillRaw) {
-      const pre = decodePrefill(prefillRaw);
-      if (pre && typeof pre === 'object') {
+      const pre = decodeReportPrefill(prefillRaw);
+      if (pre) {
         if (typeof pre.title === 'string') setTitle(pre.title);
         if (pre.format === 'usd' || pre.format === 'number') setFormat(pre.format);
-        if (pre.pointFilter && typeof pre.pointFilter === 'object') setFilter(pre.pointFilter);
+        setFilter(pre.pointFilter);
       }
     }
   }, []);
@@ -131,7 +114,7 @@ export function ReportBuilder() {
 
   const shareLink = React.useMemo(() => {
     if (!filter) return '';
-    const prefill = encodePrefill({ title, format, pointFilter: filter });
+    const prefill = encodeReportPrefill({ title, format, pointFilter: filter });
     return `/reports/builder?prefill=${prefill}`;
   }, [filter, title, format]);
 

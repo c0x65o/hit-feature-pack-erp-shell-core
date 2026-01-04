@@ -5,6 +5,9 @@ import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
 import { LucideIcon, type LucideIconComponent } from '../utils/lucide-dynamic';
+import { encodeReportPrefill } from '../utils/report-prefill';
+import { normalizePieBlock } from '../reporting/report-blocks';
+import { runPieBlock } from '../reporting/pie-runner';
 
 // Inline SVG brand icons - no external dependency needed
 // These are simple SVG paths from Simple Icons (MIT licensed)
@@ -213,6 +216,15 @@ function getByPath(obj: any, path: string): any {
     else return undefined;
   }
   return cur;
+}
+
+function applyTemplate(tpl: string, row: any): string {
+  const raw = String(tpl || '');
+  if (!raw) return '';
+  return raw.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_m, path) => {
+    const v = getByPath(row, String(path || '').trim());
+    return encodeURIComponent(v == null ? '' : String(v));
+  });
 }
 
 function formatNumber(v: number, style: 'number' | 'usd' | 'percent' = 'number') {
@@ -738,7 +750,9 @@ export function Dashboards(_props: DashboardsProps = {}) {
   const [kpiCatalogTotals, setKpiCatalogTotals] = React.useState<
     Record<string, { loading: boolean; totalsByMetricKey?: Record<string, number> }>
   >({});
-  const [pieRows, setPieRows] = React.useState<Record<string, { loading: boolean; rows?: any[] }>>({});
+  const [pieSlices, setPieSlices] = React.useState<Record<string, { loading: boolean; slices?: any[]; otherLabel?: string }>>({});
+  const [apiPieSlices, setApiPieSlices] = React.useState<Record<string, { loading: boolean; slices?: any[]; otherLabel?: string }>>({});
+  const [apiTables, setApiTables] = React.useState<Record<string, { loading: boolean; rows?: any[]; total?: number }>>({});
   const [lineSeries, setLineSeries] = React.useState<Record<string, { loading: boolean; series?: Array<{ label: string; color: string; points: Array<{ t: number; v: number }> }> }>>({});
   const [lineBucketByWidgetKey, setLineBucketByWidgetKey] = React.useState<Record<string, Bucket>>({});
   const [projectNames, setProjectNames] = React.useState<Record<string, string>>({});
@@ -794,12 +808,6 @@ export function Dashboards(_props: DashboardsProps = {}) {
     }
   }, []);
 
-  function encodePrefill(obj: any): string {
-    const json = JSON.stringify(obj || {});
-    // base64url to keep URLs readable-ish and safe
-    const b64 = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-    return encodeURIComponent(b64);
-  }
 
   const urlParams = React.useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams();
@@ -1282,27 +1290,114 @@ export function Dashboards(_props: DashboardsProps = {}) {
 
     // Pie
     const pies = widgets.filter((w: any) => w?.kind === 'pie');
-    setPieRows((prev) => {
+    setPieSlices((prev) => {
       const next = { ...prev };
-      for (const w of pies) next[w.key] = { loading: true };
+      for (const w of pies) next[w.key] = { loading: true, slices: prev[w.key]?.slices || [] };
       return next;
     });
     await Promise.all(
       pies.map(async (w: any) => {
         try {
-          const t = effectiveTime(w);
-          const body = { ...(w.query || {}) };
-          if (t) Object.assign(body, t);
-          const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-          const json = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(json?.error || `metrics/query ${res.status}`);
-          const rows = Array.isArray(json.data) ? json.data : [];
-          setPieRows((p) => ({ ...p, [w.key]: { loading: false, rows } }));
+          const block = normalizePieBlock({
+            title: String(w.title || 'Pie'),
+            format: (w?.presentation?.format === 'usd') ? 'usd' : 'number',
+            time: w?.time === 'all_time' ? 'all_time' : 'inherit',
+            query: { ...(w.query || {}) },
+            groupByKey: String(w?.presentation?.groupByKey || 'region'),
+            topN: Number(w?.presentation?.topN || 5),
+            otherLabel: String(w?.presentation?.otherLabel || 'Other'),
+          });
+          const out = await runPieBlock({ block, timeRange: effectiveTime(w) });
+          setPieSlices((p) => ({ ...p, [w.key]: { loading: false, slices: out.slices, otherLabel: out.otherLabel } }));
         } catch {
-          setPieRows((p) => ({ ...p, [w.key]: { loading: false, rows: [] } }));
+          setPieSlices((p) => ({ ...p, [w.key]: { loading: false, slices: [], otherLabel: String(w?.presentation?.otherLabel || 'Other') } }));
         }
       })
     );
+
+    // API Pie (non-metrics grouped pies, e.g. CRM pipeline stage breakdown)
+    const apiPies = widgets.filter((w: any) => w?.kind === 'api_pie');
+    if (apiPies.length) {
+      setApiPieSlices((prev) => {
+        const next = { ...prev };
+        for (const w of apiPies) next[w.key] = { loading: true, slices: prev[w.key]?.slices || [] };
+        return next;
+      });
+      await Promise.all(
+        apiPies.map(async (w: any) => {
+          try {
+            const pres = w?.presentation || {};
+            const endpoint = String(pres.endpoint || '').trim();
+            if (!endpoint) throw new Error('Missing api_pie.presentation.endpoint');
+            const res = await fetch(endpoint);
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json?.error || `api_pie fetch ${res.status}`);
+
+            const itemsField = String(pres.itemsField || 'items');
+            const labelField = String(pres.labelField || 'label');
+            const valueField = String(pres.valueField || 'value');
+            const rawField = String(pres.rawField || labelField);
+            const hrefTemplate = typeof pres.hrefTemplate === 'string' ? pres.hrefTemplate : '';
+
+            const topN = Math.max(1, Math.min(25, Number(pres.topN || 8) || 8));
+            const otherLabel = String(pres.otherLabel || 'Other');
+
+            const items = getByPath(json, itemsField);
+            const arr = Array.isArray(items) ? items : [];
+            const normalized = arr
+              .map((it: any) => ({
+                label: String(getByPath(it, labelField) ?? 'Unknown'),
+                raw: getByPath(it, rawField),
+                value: Number(getByPath(it, valueField) ?? 0),
+                href: hrefTemplate ? applyTemplate(hrefTemplate, it) : '',
+              }))
+              .map((r: any) => ({ ...r, value: Number.isFinite(r.value) ? r.value : 0 }))
+              .sort((a: any, b: any) => b.value - a.value);
+
+            const top = normalized.slice(0, topN);
+            const otherSum = normalized.slice(topN).reduce((acc: number, r: any) => acc + (Number.isFinite(r.value) ? r.value : 0), 0);
+            const slices = [
+              ...top.map((r: any, idx: number) => ({ ...r, color: palette(idx) })),
+              ...(otherSum > 0 ? [{ label: otherLabel, raw: '__other__', value: otherSum, color: '#94a3b8', href: '' }] : []),
+            ];
+
+            setApiPieSlices((p) => ({ ...p, [w.key]: { loading: false, slices, otherLabel } }));
+          } catch {
+            setApiPieSlices((p) => ({ ...p, [w.key]: { loading: false, slices: [], otherLabel: String(w?.presentation?.otherLabel || 'Other') } }));
+          }
+        })
+      );
+    }
+
+    // API Table (non-metrics tabular blocks, e.g. stalled opportunities)
+    const apiTableWidgets = widgets.filter((w: any) => w?.kind === 'api_table');
+    if (apiTableWidgets.length) {
+      setApiTables((prev) => {
+        const next = { ...prev };
+        for (const w of apiTableWidgets) next[w.key] = { loading: true, rows: prev[w.key]?.rows || [], total: prev[w.key]?.total };
+        return next;
+      });
+      await Promise.all(
+        apiTableWidgets.map(async (w: any) => {
+          try {
+            const pres = w?.presentation || {};
+            const endpoint = String(pres.endpoint || '').trim();
+            if (!endpoint) throw new Error('Missing api_table.presentation.endpoint');
+            const res = await fetch(endpoint);
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json?.error || `api_table fetch ${res.status}`);
+
+            const itemsField = String(pres.itemsField || 'items');
+            const totalField = typeof pres.totalField === 'string' ? pres.totalField : '';
+            const rows = Array.isArray(getByPath(json, itemsField)) ? (getByPath(json, itemsField) as any[]) : [];
+            const total = totalField ? Number(getByPath(json, totalField) ?? 0) : undefined;
+            setApiTables((p) => ({ ...p, [w.key]: { loading: false, rows, total: (total != null && Number.isFinite(total)) ? total : undefined } }));
+          } catch {
+            setApiTables((p) => ({ ...p, [w.key]: { loading: false, rows: [], total: undefined } }));
+          }
+        })
+      );
+    }
 
     // Line (multi series)
     const lines = widgets.filter((w: any) => w?.kind === 'line');
@@ -1798,7 +1893,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
           {!loadingDash && definition ? (
             widgetList.map((w: any) => {
               const grid = w.grid || {};
-              const span = typeof grid.w === 'number' ? grid.w : (w.kind === 'kpi' ? 3 : w.kind === 'pie' ? 6 : 12);
+              const span = typeof grid.w === 'number' ? grid.w : (w.kind === 'kpi' ? 3 : (w.kind === 'pie' || w.kind === 'api_pie') ? 6 : 12);
               const spanClass = span === 12 ? 'span-12' : span === 6 ? 'span-6' : span === 4 ? 'span-4' : 'span-3';
 
               const metricKey = String(w?.query?.metricKey || w?.series?.[0]?.query?.metricKey || w?.seriesSpec?.metricKey || '');
@@ -1952,51 +2047,14 @@ export function Dashboards(_props: DashboardsProps = {}) {
               }
 
               if (w.kind === 'pie') {
-                const st = pieRows[w.key];
-                const rows = Array.isArray(st?.rows) ? st?.rows : [];
-                const groupByKey = String(w?.presentation?.groupByKey || 'region');
-                const topN = Number(w?.presentation?.topN || 5);
-                const otherLabel = String(w?.presentation?.otherLabel || 'Other');
-                const normalized = rows
-                  .map((r: any) => ({
-                    label: String(r && (groupByKey in r) ? (r[groupByKey] ?? 'Unknown') : 'Unknown'),
-                    raw: r && (groupByKey in r) ? (r[groupByKey] ?? null) : null,
-                    value: Number(r.value ?? 0),
-                  }))
-                  .sort((a: any, b: any) => b.value - a.value);
-                const top = normalized.slice(0, topN);
-                const otherSum = normalized.slice(topN).reduce((acc: number, r: any) => acc + (Number.isFinite(r.value) ? r.value : 0), 0);
-                const slices = [
-                  ...top.map((r: any, idx: number) => ({ ...r, color: palette(idx) })),
-                  ...(otherSum > 0 ? [{ label: otherLabel, raw: '__other__', value: otherSum, color: '#94a3b8' }] : []),
-                ];
+                const st = pieSlices[w.key];
+                const slices = Array.isArray(st?.slices) ? st?.slices : [];
+                const otherLabel = String(st?.otherLabel || w?.presentation?.otherLabel || 'Other');
 
                 const onSliceClick = async (slice: any) => {
-                  const t = effectiveTime(w);
-                  const q = { ...(w.query || {}) } as any;
-                  const metricKey = String(q.metricKey || '').trim();
-                  if (!metricKey) return;
-
-                  // "Other" is a rollup of many dimension values; drilldown needs a NOT-IN filter,
-                  // which we don't support yet. Keep it non-clickable for now.
-                  if (slice?.raw === '__other__') return;
-
-                  const dims = (q.dimensions && typeof q.dimensions === 'object') ? { ...(q.dimensions as any) } : {};
-                  dims[groupByKey] = slice?.raw ?? null;
-
-                  const pointFilter: any = { metricKey, dimensions: dims };
-                  if (typeof q.entityKind === 'string' && q.entityKind.trim()) pointFilter.entityKind = q.entityKind.trim();
-                  if (typeof q.entityId === 'string' && q.entityId.trim()) pointFilter.entityId = q.entityId.trim();
-                  if (Array.isArray(q.entityIds) && q.entityIds.length) pointFilter.entityIds = q.entityIds.map((x: any) => String(x || '').trim()).filter(Boolean);
-                  if (typeof q.dataSourceId === 'string' && q.dataSourceId.trim()) pointFilter.dataSourceId = q.dataSourceId.trim();
-                  if (typeof q.sourceGranularity === 'string' && q.sourceGranularity.trim()) pointFilter.sourceGranularity = q.sourceGranularity.trim();
-                  if (t) {
-                    pointFilter.start = t.start;
-                    pointFilter.end = t.end;
-                  }
-
-                  const title = `${w.title || 'Pie'} • ${String(slice?.label || '')}`;
-                  await runDrilldown({ pointFilter, title, format: fmt as any, page: 1 });
+                  const drill = slice?.drill;
+                  if (!drill || !drill.pointFilter) return;
+                  await runDrilldown({ pointFilter: drill.pointFilter, title: drill.title, format: drill.format, page: 1 });
                 };
 
                 return (
@@ -2009,6 +2067,113 @@ export function Dashboards(_props: DashboardsProps = {}) {
                             Tip: "{otherLabel}" is an aggregate bucket; drilldown is available on named slices only (for now).
                           </div>
                         ) : null}
+                      </div>
+                    </Card>
+                  </div>
+                );
+              }
+
+              if (w.kind === 'api_pie') {
+                const st = apiPieSlices[w.key];
+                const slices = Array.isArray(st?.slices) ? st?.slices : [];
+                const otherLabel = String(st?.otherLabel || w?.presentation?.otherLabel || 'Other');
+                const format = (w?.presentation?.format === 'usd') ? 'usd' : 'number';
+
+                const onSliceClick = async (slice: any) => {
+                  const href = typeof slice?.href === 'string' ? slice.href : '';
+                  if (!href) return;
+                  if (typeof window !== 'undefined') window.location.href = href;
+                };
+
+                return (
+                  <div key={w.key} className={spanClass}>
+                    <Card title={w.title || 'Pie'}>
+                      <div style={{ padding: 14 }}>
+                        {!st || st?.loading ? <Spinner /> : <Donut slices={slices as any} format={format as any} onSliceClick={onSliceClick} />}
+                        {st && !st?.loading && slices.some((s: any) => s?.raw === '__other__') ? (
+                          <div style={{ marginTop: 10, fontSize: 12, color: colors.text.muted }}>
+                            Tip: "{otherLabel}" is an aggregate bucket; click named slices to open filtered lists.
+                          </div>
+                        ) : null}
+                      </div>
+                    </Card>
+                  </div>
+                );
+              }
+
+              if (w.kind === 'api_table') {
+                const st = apiTables[w.key];
+                const rows = Array.isArray(st?.rows) ? st?.rows : [];
+                const pres = w?.presentation || {};
+                const cols = Array.isArray(pres.columns) ? pres.columns : [];
+                const rowHrefTemplate = typeof pres.rowHrefTemplate === 'string' ? pres.rowHrefTemplate : '';
+
+                const renderCell = (row: any, col: any) => {
+                  const field = String(col?.field || '').trim();
+                  const label = String(col?.label || field || '');
+                  const fmt = String(col?.format || '').toLowerCase();
+                  const raw = field ? getByPath(row, field) : undefined;
+                  if (fmt === 'usd') return formatNumber(Number(raw ?? 0), 'usd');
+                  if (fmt === 'number') return formatNumber(Number(raw ?? 0), 'number');
+                  if (fmt === 'datetime' || fmt === 'date') {
+                    if (!raw) return '—';
+                    const d = new Date(String(raw));
+                    if (!Number.isFinite(d.getTime())) return String(raw);
+                    return fmt === 'date' ? d.toLocaleDateString() : d.toLocaleString();
+                  }
+                  return raw == null ? '—' : String(raw);
+                };
+
+                return (
+                  <div key={w.key} className={spanClass}>
+                    <Card title={w.title || 'Table'}>
+                      <div style={{ padding: 14 }}>
+                        {st?.loading ? <Spinner /> : (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <div style={{ fontSize: 12, color: colors.text.muted }}>
+                                {typeof st?.total === 'number' ? `${st.total.toLocaleString()} total` : `${rows.length.toLocaleString()} rows`}
+                              </div>
+                              {rowHrefTemplate ? <Badge variant="info">click row to open</Badge> : null}
+                            </div>
+                            <div style={{ overflowX: 'auto', border: `1px solid ${colors.border.subtle}`, borderRadius: 10 }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                  <tr style={{ textAlign: 'left', background: colors.bg.muted }}>
+                                    {cols.map((c: any, idx: number) => (
+                                      <th key={idx} style={{ padding: '8px 10px' }}>{String(c?.label || c?.field || '')}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rows.map((r: any, idx: number) => {
+                                    const href = rowHrefTemplate ? applyTemplate(rowHrefTemplate, r) : '';
+                                    return (
+                                      <tr
+                                        key={String(r?.id || idx)}
+                                        style={{ borderTop: `1px solid ${colors.border.subtle}`, cursor: href ? 'pointer' : 'default' }}
+                                        onClick={() => { if (href && typeof window !== 'undefined') window.location.href = href; }}
+                                      >
+                                        {cols.map((c: any, j: number) => (
+                                          <td key={j} style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                                            {j === 0 && href ? <a href={href} style={{ color: colors.accent.default, textDecoration: 'none' }}>{renderCell(r, c)}</a> : renderCell(r, c)}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    );
+                                  })}
+                                  {rows.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={Math.max(1, cols.length)} style={{ padding: '10px', color: colors.text.muted }}>
+                                        No rows
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </Card>
                   </div>
@@ -2134,7 +2299,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
                       disabled={!drillLastFilter}
                       onClick={() => {
                         if (!drillLastFilter) return;
-                        const prefill = encodePrefill({ title: drillTitle, format: drillFormat, pointFilter: drillLastFilter });
+                        const prefill = encodeReportPrefill({ title: drillTitle, format: drillFormat, pointFilter: drillLastFilter });
                         window.location.href = `/reports/builder?prefill=${prefill}`;
                       }}
                     >
