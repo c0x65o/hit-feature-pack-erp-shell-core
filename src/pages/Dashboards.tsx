@@ -728,6 +728,41 @@ const LS_LAST_DASHBOARD_KEY = 'hit.dashboard.lastSelectedKey';
 const LS_LAST_DASHBOARD_PACK = 'hit.dashboard.lastSelectedPack';
 const LS_LAST_DASHBOARD_KEY_BY_PACK_PREFIX = 'hit.dashboard.lastSelectedKeyByPack:';
 
+function getStoredHitToken(): string | null {
+  // The HIT web shell stores the user JWT as:
+  // - localStorage['hit_token'] (common)
+  // - cookie 'hit_token' (sometimes; not guaranteed in all deployments)
+  if (typeof document !== 'undefined') {
+    try {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'hit_token' && value) return decodeURIComponent(value);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      return localStorage.getItem('hit_token');
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit) {
+  const token = getStoredHitToken();
+  const headers = new Headers(init?.headers || undefined);
+  if (token && !headers.get('authorization') && !headers.get('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  // Always include credentials so cookie-based auth still works.
+  return fetch(input, { ...init, headers, credentials: 'include' });
+}
+
 export function Dashboards(_props: DashboardsProps = {}) {
   const { Page, Card, Button, Dropdown, Select, Input, Modal, Spinner, Badge } = useUi();
   const { colors, radius } = useThemeTokens();
@@ -789,7 +824,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
     setDrillLoading(true);
     setDrillLastFilter(args.pointFilter);
     try {
-      const res = await fetch('/api/metrics/drilldown', {
+      const res = await fetchWithAuth('/api/metrics/drilldown', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pointFilter: args.pointFilter, page, pageSize: 50, includeContributors: false }),
@@ -900,7 +935,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
   }
 
   async function fetchCatalogMap(): Promise<Record<string, MetricCatalogItem>> {
-    const res = await fetch('/api/metrics/catalog');
+    const res = await fetchWithAuth('/api/metrics/catalog');
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return {};
     const items = Array.isArray(json.items) ? json.items : Array.isArray(json.data) ? json.data : [];
@@ -951,7 +986,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
       let items: DashboardListItem[] = [];
       if (pack) {
         const u = `/api/dashboard-definitions?pack=${encodeURIComponent(pack)}&includeGlobal=false`;
-        const res = await fetch(u);
+        const res = await fetchWithAuth(u);
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
         items = normalizeItems(Array.isArray(json.data) ? json.data : []);
@@ -960,7 +995,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
         const results = await Promise.allSettled(
           defaultPacks.map(async (p) => {
             const u = `/api/dashboard-definitions?pack=${encodeURIComponent(p)}&includeGlobal=false`;
-            const res = await fetch(u);
+            const res = await fetchWithAuth(u);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
             const xs = normalizeItems(Array.isArray(json.data) ? json.data : []);
@@ -1020,7 +1055,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
     try {
       setLoadingDash(true);
       setError(null);
-      const res = await fetch(`/api/dashboard-definitions/${encodeURIComponent(key)}`);
+      const res = await fetchWithAuth(`/api/dashboard-definitions/${encodeURIComponent(key)}`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
       setDefinition(json.data as DashboardDefinition);
@@ -1187,7 +1222,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const CHUNK = 50;
             for (let i = 0; i < queries.length; i += CHUNK) {
               const chunk = queries.slice(i, i + CHUNK);
-              const res = await fetch('/api/metrics/query-batch', {
+              const res = await fetchWithAuth('/api/metrics/query-batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ queries: chunk }),
@@ -1248,7 +1283,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
               setKpiValues((p) => ({ ...p, [w.key]: { loading: false, value: 0 } }));
               return;
             }
-            const res = await fetch(endpoint);
+            const res = await fetchWithAuth(endpoint);
             const json = await res.json().catch(() => ({}));
             const raw = getByPath(json, valueField);
             const v = Number(raw ?? 0);
@@ -1267,7 +1302,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
               groupByEntityId: true,
             };
             if (t) Object.assign(body, t);
-            const res = await fetch('/api/metrics/query', {
+            const res = await fetchWithAuth('/api/metrics/query', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(body),
@@ -1293,7 +1328,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
               groupByEntityId: true,
             };
             if (t) Object.assign(body, t);
-            const res = await fetch('/api/metrics/query', {
+            const res = await fetchWithAuth('/api/metrics/query', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(body),
@@ -1315,7 +1350,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             for (const mk of keys) {
               const body: any = { metricKey: mk, bucket: 'none', agg: 'last', entityKind, groupByEntityId: true };
               if (t) Object.assign(body, t);
-              const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+              const res = await fetchWithAuth('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
               const json = await res.json().catch(() => ({}));
               if (!res.ok) throw new Error(json?.error || `metrics/query ${res.status}`);
               const rows = Array.isArray(json.data) ? json.data : [];
@@ -1328,7 +1363,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
           const t = effectiveTime(w);
           const body = { ...(w.query || {}) };
           if (t) Object.assign(body, t);
-          const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const res = await fetchWithAuth('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
           const json = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(json?.error || `metrics/query ${res.status}`);
           const rows = Array.isArray(json.data) ? json.data : [];
@@ -1342,7 +1377,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const prevEnd = new Date(start.getTime() - 1);
             const prevStart = new Date(prevEnd.getTime() - dur);
             const prevBody = { ...(w.query || {}), start: prevStart.toISOString(), end: prevEnd.toISOString() };
-            const r2 = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) });
+            const r2 = await fetchWithAuth('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) });
             const j2 = await r2.json().catch(() => ({}));
             const rr = Array.isArray(j2.data) ? j2.data : [];
             prev = Number(rr[0]?.value ?? 0);
@@ -1396,7 +1431,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const pres = w?.presentation || {};
             const endpoint = String(pres.endpoint || '').trim();
             if (!endpoint) throw new Error('Missing api_pie.presentation.endpoint');
-            const res = await fetch(endpoint);
+            const res = await fetchWithAuth(endpoint);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(json?.error || `api_pie fetch ${res.status}`);
 
@@ -1458,7 +1493,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const pres = w?.presentation || {};
             const endpoint = String(pres.endpoint || '').trim();
             if (!endpoint) throw new Error('Missing api_table.presentation.endpoint');
-            const res = await fetch(endpoint);
+            const res = await fetchWithAuth(endpoint);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(json?.error || `api_table fetch ${res.status}`);
 
@@ -1495,7 +1530,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             for (let i = 0; i < w.series.length; i++) {
               const s = w.series[i];
               const body = { ...(s.query || {}), start: t.start, end: t.end };
-              const res = await fetch('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+              const res = await fetchWithAuth('/api/metrics/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
               const json = await res.json().catch(() => ({}));
               if (!res.ok) throw new Error(json?.error || `metrics/query ${res.status}`);
               const rows = Array.isArray(json.data) ? json.data : [];
@@ -1522,7 +1557,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const cumulative = Boolean(spec.cumulative);
 
             // totals for ranking
-            const totalsRes = await fetch('/api/metrics/query', {
+            const totalsRes = await fetchWithAuth('/api/metrics/query', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ metricKey, bucket: 'none', agg, entityKind, groupByEntityId: true, start: t.start, end: t.end }),
@@ -1538,7 +1573,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const fetchedNames = spec.labelSource?.source === 'projects' ? await fetchProjectNames(topIds) : {};
 
             // series for top ids
-            const seriesRes = await fetch('/api/metrics/query', {
+            const seriesRes = await fetchWithAuth('/api/metrics/query', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ metricKey, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end }),
@@ -1547,7 +1582,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const seriesRows = Array.isArray(seriesJson.data) ? seriesJson.data : [];
 
             // total series (for other)
-            const totalRes = await fetch('/api/metrics/query', {
+            const totalRes = await fetchWithAuth('/api/metrics/query', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ metricKey, bucket, agg, entityKind, start: t.start, end: t.end }),
@@ -1623,7 +1658,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             // 1) totals by entityId across all metric keys for ranking
             const totalsByEntity = new Map<string, number>();
             for (const mk of metricKeys) {
-              const totalsRes = await fetch('/api/metrics/query', {
+              const totalsRes = await fetchWithAuth('/api/metrics/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ metricKey: mk, bucket: 'none', agg, entityKind, groupByEntityId: true, start: t.start, end: t.end }),
@@ -1649,7 +1684,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             const bucketsSet = new Set<number>();
 
             for (const mk of metricKeys) {
-              const seriesRes = await fetch('/api/metrics/query', {
+              const seriesRes = await fetchWithAuth('/api/metrics/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end }),
@@ -1674,7 +1709,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
               // compute blended total per bucket across all entities
               const totalByBucket = new Map<number, number>();
               for (const mk of metricKeys) {
-                const res = await fetch('/api/metrics/query', {
+                const res = await fetchWithAuth('/api/metrics/query', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, start: t.start, end: t.end }),
@@ -1757,7 +1792,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
     setSharesError(null);
     setSharesLoading(true);
     try {
-      const res = await fetch(`/api/dashboard-definitions/${encodeURIComponent(definition.key)}/shares`);
+      const res = await fetchWithAuth(`/api/dashboard-definitions/${encodeURIComponent(definition.key)}/shares`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
       setShares(Array.isArray(json.data) ? json.data : []);
@@ -2346,7 +2381,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
                 }))}
                 onAdd={async (entry: any) => {
                   if (!definition) return;
-                  const res = await fetch(`/api/dashboard-definitions/${encodeURIComponent(definition.key)}/shares`, {
+                  const res = await fetchWithAuth(`/api/dashboard-definitions/${encodeURIComponent(definition.key)}/shares`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ principalType: entry.principalType, principalId: entry.principalId }),
@@ -2358,7 +2393,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
                 onRemove={async (entry: any) => {
                   if (!definition) return;
                   const qs = `principalType=${encodeURIComponent(entry.principalType)}&principalId=${encodeURIComponent(entry.principalId)}`;
-                  const res = await fetch(`/api/dashboard-definitions/${encodeURIComponent(definition.key)}/shares?${qs}`, { method: 'DELETE' });
+                  const res = await fetchWithAuth(`/api/dashboard-definitions/${encodeURIComponent(definition.key)}/shares?${qs}`, { method: 'DELETE' });
                   const json = await res.json().catch(() => ({}));
                   if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
                   setShares((prev) => prev.filter((s) => !(s.principalType === entry.principalType && s.principalId === entry.principalId)));
