@@ -798,6 +798,54 @@ function ShellContent({
     setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
   }, [user]);
 
+  // Fetch profile picture on initial load if missing
+  useEffect(() => {
+    if (!currentUser?.email || currentUser?.avatar) {
+      return; // Skip if no user or avatar already exists
+    }
+
+    const email = currentUser.email;
+    let cancelled = false;
+
+    const fetchProfilePicture = async () => {
+      try {
+        const token = getStoredToken();
+        if (!token || cancelled) return;
+
+        const response = await fetch(`/api/proxy/auth/users/${encodeURIComponent(email)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+
+        if (cancelled) return;
+
+        if (response.ok) {
+          const userData = await response.json();
+          const profilePictureUrl = userData.profile_picture_url;
+          if (profilePictureUrl && !cancelled) {
+            setCurrentUser((prev) => {
+              if (!prev || prev.email !== email || prev.avatar) return prev;
+              return {
+                ...prev,
+                avatar: profilePictureUrl,
+              };
+            });
+          }
+        }
+      } catch (err) {
+        // Silently fail - avatar is optional
+      }
+    };
+
+    fetchProfilePicture();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.email]); // Only run when email changes
+
   // Listen for user profile updates (e.g., after picture upload)
   useEffect(() => {
     const handleUserProfileUpdate = async (event: CustomEvent) => {
