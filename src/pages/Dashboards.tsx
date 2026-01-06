@@ -431,6 +431,22 @@ type TimelineEvent = {
   projectName?: string | null;
 };
 
+type PointFilter = {
+  metricKey: string;
+  start?: string;
+  end?: string;
+  entityKind?: string;
+  entityId?: string;
+  entityIds?: string[];
+  dataSourceId?: string;
+  sourceGranularity?: string;
+  dimensions?: Record<string, string | number | boolean | null>;
+};
+
+type DrillDescriptor =
+  | { kind: 'pointFilter'; pointFilter: PointFilter; title: string; format: 'number' | 'usd' }
+  | { kind: 'aggregateRow'; baseQuery: any; rowContext: any; title: string; format: 'number' | 'usd' };
+
 function dayKey(d: string | Date): string {
   if (typeof d === 'string') {
     // e.g. "2025-12-17T00:00:00Z" or "2025-12-17"
@@ -450,14 +466,25 @@ function MultiLineChart({
   bucketControl,
   timelineOverlay,
   timelineEvents,
+  onDrill,
+  onDrillMenu,
 }: {
   title: string;
   format: 'number' | 'usd';
-  series: Array<{ label: string; color: string; points: Array<{ t: number; v: number }> }>;
+  series: Array<{
+    id: string;
+    label: string;
+    color: string;
+    points: Array<{ t: number; v: number; bucketIso?: string }>;
+    drill?: { baseQuery: any; rowContextBase?: any; titlePrefix?: string } | null;
+    drillMenu?: { titlePrefix?: string; options: Array<{ label: string; baseQuery: any; rowContextBase?: any }> } | null;
+  }>;
   bucket: Bucket;
   bucketControl?: React.ReactNode;
   timelineOverlay?: boolean;
   timelineEvents?: TimelineEvent[];
+  onDrill?: (d: DrillDescriptor) => void;
+  onDrillMenu?: (args: { title: string; format: 'number' | 'usd'; options: Array<{ label: string; d: DrillDescriptor }> }) => void;
 }) {
   const { colors, radius, shadows } = useThemeTokens();
   const wPx = 900;
@@ -542,9 +569,13 @@ function MultiLineChart({
         t: buckets[hoverIdx],
         x: toX(hoverIdx),
         items: series.map((s) => ({
+          id: s.id,
           label: s.label,
           color: s.color,
           v: s.points[hoverIdx]?.v ?? 0,
+          bucketIso: s.points[hoverIdx]?.bucketIso,
+          drill: s.drill,
+          drillMenu: s.drillMenu,
         })),
         events:
           timelineOverlay && Array.isArray(timelineEvents)
@@ -659,7 +690,7 @@ function MultiLineChart({
               top: 58,
               left: `${Math.max(12, Math.min(tooltip.x / wPx * 100, 88))}%`,
               transform: 'translateX(-50%)',
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
               color: colors.text.primary,
               background: colors.bg.surface,
               border: `1px solid ${colors.border.subtle}`,
@@ -673,17 +704,97 @@ function MultiLineChart({
               {formatBucketLabel(tooltip.t)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {tooltip.items.map((it) => (
-                <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '10px 1fr auto', gap: 10, alignItems: 'center' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 999, background: it.color, display: 'inline-block' }} />
-                  <span style={{ fontSize: 12, color: colors.text.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {it.label}
-                  </span>
-                  <span style={{ fontSize: 12, color: colors.text.secondary, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatNumber(Number(it.v || 0), format)}
-                  </span>
-                </div>
-              ))}
+              {tooltip.items.map((it) => {
+                const canDrill = Boolean(onDrill && it.drill);
+                const canMenu = Boolean(onDrillMenu && it.drillMenu);
+                return (
+                  <div
+                    key={it.id}
+                    role={canDrill || canMenu ? 'button' : undefined}
+                    tabIndex={canDrill || canMenu ? 0 : undefined}
+                    onClick={() => {
+                      const bucketIso = it.bucketIso || new Date(tooltip.t).toISOString();
+                      if (onDrill && it.drill) {
+                        onDrill({
+                          kind: 'aggregateRow',
+                          baseQuery: it.drill.baseQuery,
+                          rowContext: { ...(it.drill.rowContextBase || {}), bucket: bucketIso },
+                          title: `${it.drill.titlePrefix || title} • ${it.label}`,
+                          format,
+                        });
+                        return;
+                      }
+                      if (onDrillMenu && it.drillMenu) {
+                        onDrillMenu({
+                          title: `${it.drillMenu.titlePrefix || title} • ${it.label}`,
+                          format,
+                          options: it.drillMenu.options.map((o) => ({
+                            label: o.label,
+                            d: {
+                              kind: 'aggregateRow',
+                              baseQuery: o.baseQuery,
+                              rowContext: { ...(o.rowContextBase || {}), bucket: bucketIso },
+                              title: `${it.drillMenu?.titlePrefix || title} • ${it.label} • ${o.label}`,
+                              format,
+                            },
+                          })),
+                        });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (!canDrill && !canMenu) return;
+                      if (e.key !== 'Enter' && e.key !== ' ') return;
+                      e.preventDefault();
+                      const bucketIso = it.bucketIso || new Date(tooltip.t).toISOString();
+                      if (canDrill && onDrill && it.drill) {
+                        onDrill({
+                          kind: 'aggregateRow',
+                          baseQuery: it.drill.baseQuery,
+                          rowContext: { ...(it.drill.rowContextBase || {}), bucket: bucketIso },
+                          title: `${it.drill.titlePrefix || title} • ${it.label}`,
+                          format,
+                        });
+                        return;
+                      }
+                      if (canMenu && onDrillMenu && it.drillMenu) {
+                        onDrillMenu({
+                          title: `${it.drillMenu.titlePrefix || title} • ${it.label}`,
+                          format,
+                          options: it.drillMenu.options.map((o) => ({
+                            label: o.label,
+                            d: {
+                              kind: 'aggregateRow',
+                              baseQuery: o.baseQuery,
+                              rowContext: { ...(o.rowContextBase || {}), bucket: bucketIso },
+                              title: `${it.drillMenu?.titlePrefix || title} • ${it.label} • ${o.label}`,
+                              format,
+                            },
+                          })),
+                        });
+                      }
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '10px 1fr auto',
+                      gap: 10,
+                      alignItems: 'center',
+                      borderRadius: radius.md,
+                      padding: '4px 6px',
+                      cursor: (canDrill || canMenu) ? 'pointer' : 'default',
+                      userSelect: 'none',
+                    }}
+                    title={canDrill ? 'Click to drill down' : canMenu ? 'Click to choose drilldown' : undefined}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: 999, background: it.color, display: 'inline-block' }} />
+                    <span style={{ fontSize: 12, color: colors.text.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {it.label}
+                    </span>
+                    <span style={{ fontSize: 12, color: colors.text.secondary, fontVariantNumeric: 'tabular-nums' }}>
+                      {formatNumber(Number(it.v || 0), format)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             {timelineOverlay && tooltip.events && tooltip.events.length > 0 ? (
               <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${colors.border.subtle}` }}>
@@ -794,7 +905,22 @@ export function Dashboards(_props: DashboardsProps = {}) {
     Record<string, { loading: boolean; slices?: any[]; otherLabel?: string; error?: string }>
   >({});
   const [apiTables, setApiTables] = React.useState<Record<string, { loading: boolean; rows?: any[]; total?: number }>>({});
-  const [lineSeries, setLineSeries] = React.useState<Record<string, { loading: boolean; series?: Array<{ label: string; color: string; points: Array<{ t: number; v: number }> }> }>>({});
+  const [lineSeries, setLineSeries] = React.useState<
+    Record<
+      string,
+      {
+        loading: boolean;
+        series?: Array<{
+          id: string;
+          label: string;
+          color: string;
+          points: Array<{ t: number; v: number; bucketIso?: string }>;
+          drill?: { baseQuery: any; rowContextBase?: any; titlePrefix?: string } | null;
+          drillMenu?: { titlePrefix?: string; options: Array<{ label: string; baseQuery: any; rowContextBase?: any }> } | null;
+        }>;
+      }
+    >
+  >({});
   const [lineBucketByWidgetKey, setLineBucketByWidgetKey] = React.useState<Record<string, Bucket>>({});
   const [projectNames, setProjectNames] = React.useState<Record<string, string>>({});
   const [timelineEvents, setTimelineEvents] = React.useState<TimelineEvent[]>([]);
@@ -814,6 +940,12 @@ export function Dashboards(_props: DashboardsProps = {}) {
     total: 0,
   });
   const [drillLastFilter, setDrillLastFilter] = React.useState<any | null>(null);
+
+  // Drilldown menu (used when a rendered value is composed of multiple metrics).
+  const [drillMenuOpen, setDrillMenuOpen] = React.useState(false);
+  const [drillMenuTitle, setDrillMenuTitle] = React.useState<string>('Drilldown');
+  const [drillMenuFormat, setDrillMenuFormat] = React.useState<'number' | 'usd'>('number');
+  const [drillMenuOptions, setDrillMenuOptions] = React.useState<Array<{ label: string; d: DrillDescriptor }>>([]);
 
   const runDrilldown = React.useCallback(async (args: { pointFilter: any; title: string; format: 'number' | 'usd'; page?: number }) => {
     const page = typeof args.page === 'number' ? args.page : 1;
@@ -847,6 +979,56 @@ export function Dashboards(_props: DashboardsProps = {}) {
     } finally {
       setDrillLoading(false);
     }
+  }, []);
+
+  const runDrillDescriptor = React.useCallback(async (d: DrillDescriptor) => {
+    if (d.kind === 'pointFilter') {
+      await runDrilldown({ pointFilter: d.pointFilter, title: d.title, format: d.format, page: 1 });
+      return;
+    }
+
+    // aggregateRow: let the server derive the exact filter (bucket narrowing, entityId/groupBy dims).
+    setDrillOpen(true);
+    setDrillTitle(d.title || 'Drilldown');
+    setDrillFormat(d.format);
+    setDrillError(null);
+    setDrillLoading(true);
+    setDrillLastFilter(null);
+    try {
+      const res = await fetchWithAuth('/api/metrics/drilldown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseQuery: d.baseQuery, rowContext: d.rowContext, page: 1, pageSize: 50, includeContributors: false }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `metrics/drilldown ${res.status}`);
+      setDrillPoints(Array.isArray(json?.points) ? json.points : []);
+      const p = json?.pagination;
+      setDrillPagination({
+        page: typeof p?.page === 'number' ? p.page : 1,
+        pageSize: typeof p?.pageSize === 'number' ? p.pageSize : 50,
+        total: typeof p?.total === 'number' ? p.total : 0,
+      });
+      const tz = String(json?.meta?.reportTimezone || 'UTC');
+      setDrillReportTz(tz || 'UTC');
+
+      const resolved = (json as any)?.meta?.resolvedPointFilter;
+      if (resolved && typeof resolved === 'object') setDrillLastFilter(resolved);
+    } catch (e) {
+      setDrillError(e instanceof Error ? e.message : String(e));
+      setDrillPoints([]);
+      setDrillPagination({ page: 1, pageSize: 50, total: 0 });
+      setDrillLastFilter(null);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, [runDrilldown]);
+
+  const openDrillMenu = React.useCallback((args: { title: string; format: 'number' | 'usd'; options: Array<{ label: string; d: DrillDescriptor }> }) => {
+    setDrillMenuTitle(args.title || 'Drilldown');
+    setDrillMenuFormat(args.format);
+    setDrillMenuOptions(Array.isArray(args.options) ? args.options : []);
+    setDrillMenuOpen(true);
   }, []);
 
 
@@ -1552,7 +1734,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
 
           // Explicit series: [{ key, query }]
           if (Array.isArray(w.series) && w.series.length > 0) {
-            const out: Array<{ label: string; color: string; points: Array<{ t: number; v: number }> }> = [];
+            const out: Array<{ id: string; label: string; color: string; points: Array<{ t: number; v: number; bucketIso?: string }>; drill?: { baseQuery: any; rowContextBase?: any; titlePrefix?: string } | null }> = [];
             for (let i = 0; i < w.series.length; i++) {
               const s = w.series[i];
               const body = { ...(s.query || {}), start: t.start, end: t.end };
@@ -1561,10 +1743,16 @@ export function Dashboards(_props: DashboardsProps = {}) {
               if (!res.ok) throw new Error(json?.error || `metrics/query ${res.status}`);
               const rows = Array.isArray(json.data) ? json.data : [];
               const pts = rows
-                .map((r: any) => ({ t: r.bucket ? new Date(r.bucket).getTime() : NaN, v: Number(r.value ?? 0) }))
+                .map((r: any) => ({ t: r.bucket ? new Date(r.bucket).getTime() : NaN, v: Number(r.value ?? 0), bucketIso: typeof r.bucket === 'string' ? r.bucket : undefined }))
                 .filter((p: any) => Number.isFinite(p.t))
                 .sort((a: any, b: any) => a.t - b.t);
-              out.push({ label: String(s.key || `Series ${i + 1}`), color: palette(i), points: pts });
+              out.push({
+                id: `explicit_${w.key}_${i}`,
+                label: String(s.key || `Series ${i + 1}`),
+                color: palette(i),
+                points: pts,
+                drill: { baseQuery: body, rowContextBase: {}, titlePrefix: String(w.title || 'Line') },
+              });
             }
             setLineSeries((p) => ({ ...p, [w.key]: { loading: false, series: out } }));
             return;
@@ -1621,10 +1809,12 @@ export function Dashboards(_props: DashboardsProps = {}) {
               .sort((a: any, b: any) => a - b);
 
             const totalByT = new Map<number, number>();
+            const bucketIsoByT = new Map<number, string>();
             for (const r of totalRows) {
               const tt = r.bucket ? new Date(r.bucket).getTime() : NaN;
               if (!Number.isFinite(tt)) continue;
               totalByT.set(tt, Number(r.value ?? 0));
+              if (typeof r.bucket === 'string') bucketIsoByT.set(tt, r.bucket);
             }
 
             const byEntity = new Map<string, Map<number, number>>();
@@ -1636,22 +1826,37 @@ export function Dashboards(_props: DashboardsProps = {}) {
               byEntity.get(id)!.set(tt, Number(r.value ?? 0));
             }
 
-            const out: Array<{ label: string; color: string; points: Array<{ t: number; v: number }> }> = [];
+            const baseQuery = { metricKey, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end };
+            const out: Array<{ id: string; label: string; color: string; points: Array<{ t: number; v: number; bucketIso?: string }>; drill?: { baseQuery: any; rowContextBase?: any; titlePrefix?: string } | null }> = [];
             topIds.forEach((id: string, idx: number) => {
               const m = byEntity.get(id) || new Map();
               const label = spec.labelSource?.source === 'projects' ? (fetchedNames[id] || projectNames[id] || id) : id;
-              out.push({ label, color: palette(idx), points: buckets.map((tt: number) => ({ t: tt, v: Number(m.get(tt) ?? 0) })) });
+              out.push({
+                id: `ent_${w.key}_${id}`,
+                label,
+                color: palette(idx),
+                points: buckets.map((tt: number) => ({ t: tt, v: Number(m.get(tt) ?? 0), bucketIso: bucketIsoByT.get(tt) })),
+                drill: { baseQuery, rowContextBase: { entityId: id }, titlePrefix: String(w.title || 'Line') },
+              });
             });
 
             if (includeOther) {
+              // "Other" = all entities except topIds. We approximate by enumerating entityIds beyond topN when feasible.
+              const otherIds = ranked.slice(topN).map((r: any) => r.entityId).filter(Boolean);
+              const otherIdsLimited = otherIds.slice(0, 1000);
+              const otherBaseQuery = otherIdsLimited.length
+                ? { metricKey, bucket, agg, entityKind, groupByEntityId: true, entityIds: otherIdsLimited, start: t.start, end: t.end }
+                : null;
               out.push({
+                id: `other_${w.key}`,
                 label: otherLabel,
                 color: '#94a3b8',
                 points: buckets.map((tt: number) => {
                   const total = Number(totalByT.get(tt) ?? 0);
                   const sumTop = topIds.reduce((acc: number, id: string) => acc + Number(byEntity.get(id)?.get(tt) ?? 0), 0);
-                  return { t: tt, v: Math.max(0, total - sumTop) };
+                  return { t: tt, v: Math.max(0, total - sumTop), bucketIso: bucketIsoByT.get(tt) };
                 }),
+                drill: otherBaseQuery ? { baseQuery: otherBaseQuery, rowContextBase: {}, titlePrefix: String(w.title || 'Line') } : null,
               });
             }
 
@@ -1708,6 +1913,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
             // 2) per-bucket series for top IDs: sum across metric keys
             const byEntity = new Map<string, Map<number, number>>();
             const bucketsSet = new Set<number>();
+            const bucketIsoByT = new Map<number, string>();
 
             for (const mk of metricKeys) {
               const seriesRes = await fetchWithAuth('/api/metrics/query', {
@@ -1722,6 +1928,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
                 const tt = r.bucket ? new Date(r.bucket).getTime() : NaN;
                 if (!id || !Number.isFinite(tt)) continue;
                 bucketsSet.add(tt);
+                if (typeof r.bucket === 'string' && !bucketIsoByT.has(tt)) bucketIsoByT.set(tt, r.bucket);
                 if (!byEntity.has(id)) byEntity.set(id, new Map());
                 byEntity.get(id)!.set(tt, (byEntity.get(id)!.get(tt) || 0) + Number(r.value ?? 0));
               }
@@ -1746,6 +1953,7 @@ export function Dashboards(_props: DashboardsProps = {}) {
                   const tt = r.bucket ? new Date(r.bucket).getTime() : NaN;
                   if (!Number.isFinite(tt)) continue;
                   totalByBucket.set(tt, (totalByBucket.get(tt) || 0) + Number(r.value ?? 0));
+                  if (typeof r.bucket === 'string' && !bucketIsoByT.has(tt)) bucketIsoByT.set(tt, r.bucket);
                 }
               }
               otherSeries = buckets.map((tt) => {
@@ -1755,14 +1963,52 @@ export function Dashboards(_props: DashboardsProps = {}) {
               });
             }
 
-            const out: Array<{ label: string; color: string; points: Array<{ t: number; v: number }> }> = [];
+            const otherIds = ranked.slice(topN).map((r) => r.entityId).filter(Boolean);
+            const otherIdsLimited = otherIds.slice(0, 1000);
+
+            const out: Array<{
+              id: string;
+              label: string;
+              color: string;
+              points: Array<{ t: number; v: number; bucketIso?: string }>;
+              drillMenu?: { titlePrefix?: string; options: Array<{ label: string; baseQuery: any; rowContextBase?: any }> } | null;
+              drill?: { baseQuery: any; rowContextBase?: any; titlePrefix?: string } | null;
+            }> = [];
             topIds.forEach((id: string, idx: number) => {
               const m = byEntity.get(id) || new Map();
               const label = spec.labelSource?.source === 'projects' ? (fetchedNames[id] || projectNames[id] || id) : id;
-              out.push({ label, color: palette(idx), points: buckets.map((tt) => ({ t: tt, v: Number(m.get(tt) ?? 0) })) });
+              out.push({
+                id: `blend_${w.key}_${id}`,
+                label,
+                color: palette(idx),
+                points: buckets.map((tt) => ({ t: tt, v: Number(m.get(tt) ?? 0), bucketIso: bucketIsoByT.get(tt) })),
+                drillMenu: {
+                  titlePrefix: String(w.title || 'Line'),
+                  options: metricKeys.map((mk) => ({
+                    label: mk,
+                    baseQuery: { metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, entityIds: topIds, start: t.start, end: t.end },
+                    rowContextBase: { entityId: id },
+                  })),
+                },
+              });
             });
             if (includeOther && otherSeries) {
-              out.push({ label: otherLabel, color: '#94a3b8', points: otherSeries });
+              out.push({
+                id: `blend_other_${w.key}`,
+                label: otherLabel,
+                color: '#94a3b8',
+                points: otherSeries.map((p) => ({ ...p, bucketIso: bucketIsoByT.get(p.t) })),
+                drillMenu: {
+                  titlePrefix: String(w.title || 'Line'),
+                  options: metricKeys.map((mk) => ({
+                    label: mk,
+                    baseQuery: otherIdsLimited.length
+                      ? { metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, entityIds: otherIdsLimited, start: t.start, end: t.end }
+                      : { metricKey: mk, bucket, agg, entityKind, groupByEntityId: true, start: t.start, end: t.end },
+                    rowContextBase: {},
+                  })),
+                },
+              });
             }
 
             if (cumulative) {
@@ -2107,6 +2353,11 @@ export function Dashboards(_props: DashboardsProps = {}) {
                               const iconName = String(it.icon || fallbackIconForMetric(it.category) || '');
                               const Icon = resolvePlatformIcon(iconName);
                               const iconColor = String(it.icon_color || colors.accent.default);
+                              const t = effectiveTime(w);
+                              const ek = isAutoEntityKind ? pickEntityKindForMetric(it) : entityKind;
+                              const pf: any = { metricKey: mk };
+                              if (ek) pf.entityKind = ek;
+                              if (t) { pf.start = t.start; pf.end = t.end; }
                               return (
                                 <div
                                   key={mk}
@@ -2114,6 +2365,28 @@ export function Dashboards(_props: DashboardsProps = {}) {
                                   style={{
                                     border: `1px solid ${colors.border.subtle}`,
                                     background: colors.bg.surface,
+                                    cursor: 'pointer',
+                                  }}
+                                  title="Click to drill down"
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => {
+                                    runDrillDescriptor({
+                                      kind: 'pointFilter',
+                                      pointFilter: pf,
+                                      title: `${String(w.title || 'KPIs')} • ${String(it.label || mk)}`,
+                                      format: format as any,
+                                    });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                                    e.preventDefault();
+                                    runDrillDescriptor({
+                                      kind: 'pointFilter',
+                                      pointFilter: pf,
+                                      title: `${String(w.title || 'KPIs')} • ${String(it.label || mk)}`,
+                                      format: format as any,
+                                    });
                                   }}
                                 >
                                   <div className="kpi-mini-top">
@@ -2162,11 +2435,122 @@ export function Dashboards(_props: DashboardsProps = {}) {
                 const Icon = resolvePlatformIcon(iconName);
                 const iconColor = String(w?.presentation?.iconColor || cat?.icon_color || colors.accent.default);
                 const action = w?.presentation?.action;
+                const t = effectiveTime(w);
+                const valueSource = w?.presentation?.valueSource;
+
+                const buildPointFilter = (): PointFilter | null => {
+                  // 1) valueSource-driven metric KPIs
+                  if (valueSource?.kind === 'metrics_sum_last_per_entity' && typeof valueSource.metricKey === 'string') {
+                    const pf: PointFilter = { metricKey: String(valueSource.metricKey).trim() };
+                    const ek = typeof valueSource.entityKind === 'string' ? valueSource.entityKind.trim() : (typeof w?.query?.entityKind === 'string' ? w.query.entityKind.trim() : '');
+                    if (ek) pf.entityKind = ek;
+                    if (t) { pf.start = t.start; pf.end = t.end; }
+                    return pf;
+                  }
+                  if (valueSource?.kind === 'metrics_sum_agg_per_entity' && typeof valueSource.metricKey === 'string') {
+                    const pf: PointFilter = { metricKey: String(valueSource.metricKey).trim() };
+                    const ek = typeof valueSource.entityKind === 'string' ? valueSource.entityKind.trim() : (typeof w?.query?.entityKind === 'string' ? w.query.entityKind.trim() : '');
+                    if (ek) pf.entityKind = ek;
+                    if (t) { pf.start = t.start; pf.end = t.end; }
+                    return pf;
+                  }
+                  // 2) direct metric query KPIs
+                  const q = w?.query;
+                  const mk = typeof q?.metricKey === 'string' ? q.metricKey.trim() : '';
+                  if (!mk) return null;
+                  const pf: PointFilter = { metricKey: mk };
+                  if (typeof q.entityKind === 'string' && q.entityKind.trim()) pf.entityKind = q.entityKind.trim();
+                  if (typeof q.entityId === 'string' && q.entityId.trim()) pf.entityId = q.entityId.trim();
+                  if (Array.isArray(q.entityIds)) {
+                    const ids = (q.entityIds as any[]).map((x) => String(x || '').trim()).filter(Boolean);
+                    if (ids.length) pf.entityIds = ids;
+                  }
+                  if (typeof q.dataSourceId === 'string' && q.dataSourceId.trim()) pf.dataSourceId = q.dataSourceId.trim();
+                  if (typeof q.sourceGranularity === 'string' && q.sourceGranularity.trim()) pf.sourceGranularity = q.sourceGranularity.trim();
+                  if (q.dimensions && typeof q.dimensions === 'object') pf.dimensions = q.dimensions as any;
+                  if (t) { pf.start = t.start; pf.end = t.end; }
+                  return pf;
+                };
+
+                const drillPointFilter = buildPointFilter();
+                const drillMenu =
+                  valueSource?.kind === 'metrics_sum_last_per_entity_multi' && Array.isArray(valueSource.metricKeys)
+                    ? (valueSource.metricKeys as any[]).map((x) => String(x || '').trim()).filter(Boolean)
+                    : [];
+                const canDrill = Boolean(drillPointFilter) || drillMenu.length > 0;
 
                 return (
                   <div key={w.key} className={spanClass}>
                     <Card>
-                      <div className="kpi">
+                      <div
+                        className="kpi"
+                        style={{ cursor: canDrill ? 'pointer' : undefined }}
+                        title={canDrill ? 'Click to drill down' : undefined}
+                        role={canDrill ? 'button' : undefined}
+                        tabIndex={canDrill ? 0 : undefined}
+                        onClick={() => {
+                          if (drillMenu.length > 0) {
+                            openDrillMenu({
+                              title: `${String(w.title || cat?.label || metricKey || 'KPI')}`,
+                              format: fmt as any,
+                              options: drillMenu.map((mk) => {
+                                const pf: PointFilter = { metricKey: mk };
+                                const ek = typeof valueSource.entityKind === 'string' ? valueSource.entityKind.trim() : (typeof w?.query?.entityKind === 'string' ? w.query.entityKind.trim() : '');
+                                if (ek) pf.entityKind = ek;
+                                if (t) { pf.start = t.start; pf.end = t.end; }
+                                return {
+                                  label: mk,
+                                  d: { kind: 'pointFilter', pointFilter: pf, title: `${String(w.title || 'KPI')} • ${mk}`, format: fmt as any },
+                                };
+                              }),
+                            });
+                            return;
+                          }
+                          if (drillPointFilter) {
+                            runDrillDescriptor({
+                              kind: 'pointFilter',
+                              pointFilter: drillPointFilter,
+                              title: `${String(w.title || cat?.label || metricKey || 'KPI')}`,
+                              format: fmt as any,
+                            });
+                            return;
+                          }
+                          if (action?.href) {
+                            window.location.href = String(action.href);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (!canDrill) return;
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          e.preventDefault();
+                          // Mirror click behavior
+                          if (drillMenu.length > 0) {
+                            openDrillMenu({
+                              title: `${String(w.title || cat?.label || metricKey || 'KPI')}`,
+                              format: fmt as any,
+                              options: drillMenu.map((mk) => {
+                                const pf: PointFilter = { metricKey: mk };
+                                const ek = typeof valueSource.entityKind === 'string' ? valueSource.entityKind.trim() : (typeof w?.query?.entityKind === 'string' ? w.query.entityKind.trim() : '');
+                                if (ek) pf.entityKind = ek;
+                                if (t) { pf.start = t.start; pf.end = t.end; }
+                                return {
+                                  label: mk,
+                                  d: { kind: 'pointFilter', pointFilter: pf, title: `${String(w.title || 'KPI')} • ${mk}`, format: fmt as any },
+                                };
+                              }),
+                            });
+                            return;
+                          }
+                          if (drillPointFilter) {
+                            runDrillDescriptor({
+                              kind: 'pointFilter',
+                              pointFilter: drillPointFilter,
+                              title: `${String(w.title || cat?.label || metricKey || 'KPI')}`,
+                              format: fmt as any,
+                            });
+                          }
+                        }}
+                      >
                         <div className="kpi-head">
                           <div>
                             <div className="kpi-title">{w.title || cat?.label || metricKey}</div>
@@ -2193,7 +2577,14 @@ export function Dashboards(_props: DashboardsProps = {}) {
                           </div>
                         ) : null}
                         {action?.href && action?.label ? (
-                          <a className="kpi-action" href={String(action.href)}>
+                          <a
+                            className="kpi-action"
+                            href={String(action.href)}
+                            onClick={(e: any) => {
+                              // Prevent KPI card drilldown click handler from also firing.
+                              e.stopPropagation?.();
+                            }}
+                          >
                             {String(action.label)}
                           </a>
                         ) : (
@@ -2387,6 +2778,8 @@ export function Dashboards(_props: DashboardsProps = {}) {
                         bucketControl={bucketControl}
                         timelineOverlay={overlayEnabled}
                         timelineEvents={overlayEnabled ? timelineEvents : []}
+                        onDrill={(d) => runDrillDescriptor(d)}
+                        onDrillMenu={(args) => openDrillMenu(args)}
                       />
                     )}
                   </div>
@@ -2452,6 +2845,40 @@ export function Dashboards(_props: DashboardsProps = {}) {
                 onUpdate={async () => { /* no-op (READ-only) */ }}
               />
             )}
+          </div>
+        </Modal>
+
+        <Modal
+          open={drillMenuOpen}
+          onClose={() => setDrillMenuOpen(false)}
+          title={drillMenuTitle}
+          description="This value is composed of multiple metrics. Choose what to drill into."
+        >
+          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {drillMenuOptions.length === 0 ? (
+              <div style={{ fontSize: 13, opacity: 0.75 }}>No drilldown options available.</div>
+            ) : (
+              drillMenuOptions.map((opt, idx) => (
+                <Button
+                  key={`${opt.label}_${idx}`}
+                  variant="secondary"
+                  onClick={async () => {
+                    setDrillMenuOpen(false);
+                    await runDrillDescriptor(opt.d);
+                  }}
+                >
+                  Drill into: {opt.label}
+                </Button>
+              ))
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => setDrillMenuOpen(false)}>
+                Close
+              </Button>
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              Tip: if you want “one-click drilldown” for blended metrics, we can model the blend as a first-class derived metric later.
+            </div>
           </div>
         </Modal>
 
