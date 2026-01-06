@@ -786,12 +786,40 @@ function ShellContent({
   }, [themePreference, applyThemePreference]);
 
   useEffect(() => {
-    setCurrentUser(user || null);
+    // Map profile_picture_url to avatar if present (user prop might have either field)
+    const mappedUser = user ? {
+      ...user,
+      avatar: (user as any).profile_picture_url || user.avatar || undefined,
+    } : null;
+    setCurrentUser(mappedUser);
     // Note: name is no longer stored - email is used as the identifier
     setProfileLoaded(false);
     setProfileMetadata({});
     setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
   }, [user]);
+
+  // Listen for user profile updates (e.g., after picture upload)
+  useEffect(() => {
+    const handleUserProfileUpdate = (event: CustomEvent) => {
+      const detail = event.detail as { profile_picture_url?: string | null; email?: string };
+      const updatedProfilePictureUrl = detail?.profile_picture_url;
+      const updatedEmail = detail?.email;
+      
+      // Only update if it's for the current user
+      if (updatedProfilePictureUrl !== undefined && currentUser && 
+          (!updatedEmail || updatedEmail === currentUser.email)) {
+        setCurrentUser({
+          ...currentUser,
+          avatar: updatedProfilePictureUrl || undefined,
+        });
+      }
+    };
+
+    window.addEventListener('user-profile-updated' as any, handleUserProfileUpdate as EventListener);
+    return () => {
+      window.removeEventListener('user-profile-updated' as any, handleUserProfileUpdate as EventListener);
+    };
+  }, [currentUser]);
 
   const enrichNotificationsWithReadState = useCallback((items: Notification[]) => {
     return items.map((n) => ({
