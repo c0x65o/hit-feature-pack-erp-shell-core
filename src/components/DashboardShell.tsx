@@ -11,7 +11,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { Monitor, Moon, Sun, X, RotateCw } from 'lucide-react';
-import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit } from '@hit/ui-kit';
+import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit, clearUserAvatarCache } from '@hit/ui-kit';
 import type { NavItem, ShellUser, Notification, ShellConfig, ConnectionStatus } from '../types';
 import { LucideIcon } from '../utils/lucide-dynamic';
 
@@ -851,6 +851,11 @@ function ShellContent({
     const handleUserProfileUpdate = async (event: CustomEvent) => {
       const detail = event.detail as { profile_picture_url?: string | null; email?: string };
       const updatedEmail = detail?.email;
+      
+      // Clear the UserAvatar cache so other components pick up the new picture
+      if (updatedEmail) {
+        clearUserAvatarCache(updatedEmail);
+      }
       
       // Only update if it's for the current user
       if (!currentUser || (updatedEmail && updatedEmail !== currentUser.email)) {

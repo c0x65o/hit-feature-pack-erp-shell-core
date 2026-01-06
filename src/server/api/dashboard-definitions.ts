@@ -204,16 +204,16 @@ async function ensureDefaultPackDashboards(db: any, pack: string) {
       layout: { grid: { cols: 12, rowHeight: 36, gap: 14 } },
       widgets: [
         {
-          key: 'kpi.crm.companies',
+          key: 'kpi.crm.prospects',
           kind: 'kpi',
-          title: 'Companies',
+          title: 'Prospects',
           grid: { x: 0, y: 0, w: 3, h: 2 },
           time: 'all_time',
           presentation: {
             icon: 'Building',
             iconColor: '#2563eb',
-            valueSource: { kind: 'api_count', endpoint: '/api/crm/companies', totalField: 'pagination.total' },
-            action: { label: 'View All', href: '/crm/companies' },
+            valueSource: { kind: 'api_count', endpoint: '/api/crm/prospects', totalField: 'pagination.total' },
+            action: { label: 'View All', href: '/crm/prospects' },
           },
         },
         {
