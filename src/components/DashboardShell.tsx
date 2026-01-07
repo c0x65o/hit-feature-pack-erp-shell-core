@@ -2674,6 +2674,32 @@ export function DashboardShell({
   connectionStatus = 'disconnected',
   version,
 }: DashboardShellProps) {
+  const debugNav =
+    typeof window !== 'undefined' &&
+    (() => {
+      try {
+        return window.localStorage.getItem('hit_debug_nav') === '1' || new URLSearchParams(window.location.search).has('debugNav');
+      } catch {
+        return false;
+      }
+    })();
+  const debugIdRef = React.useRef<string>(
+    typeof window === 'undefined' ? 'ssr' : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  );
+
+  React.useEffect(() => {
+    if (!debugNav) return;
+    const id = debugIdRef.current;
+    console.log('[DashboardShell] MOUNT', { id, activePath, navItemsCount: Array.isArray(navItems) ? navItems.length : 0 });
+    return () => console.log('[DashboardShell] UNMOUNT', { id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
+    if (!debugNav) return;
+    console.log('[DashboardShell] activePath', { id: debugIdRef.current, activePath });
+  }, [activePath, debugNav]);
+
   const config: ShellConfig = {
     brandName: configProp.brandName || 'HIT',
     logoUrl: configProp.logoUrl,

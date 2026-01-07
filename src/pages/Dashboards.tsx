@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
@@ -880,11 +880,9 @@ function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit) {
 }
 
 export function Dashboards(props: DashboardsProps = {}) {
-  const { pack: packProp, dashboardKey: dashboardKeyProp } = props;
+  const { pack: packProp, dashboardKey: dashboardKeyProp, onNavigate } = props as any;
   const { Page, Card, Button, Dropdown, Select, Input, Modal, Spinner, Badge } = useUi();
   const { colors, radius } = useThemeTokens();
-  const router = useRouter();
-  const pathname = usePathname() ?? '/dashboards';
   const searchParams = useSearchParams();
   const searchParamsString = searchParams?.toString() || '';
 
@@ -1050,6 +1048,8 @@ export function Dashboards(props: DashboardsProps = {}) {
   const defaultPacks = React.useMemo(() => ['crm', 'projects', 'marketing'], []);
   const isDefaultPackMode = !pack;
   const urlKey = React.useMemo(() => (searchParams?.get('key') || '').trim(), [searchParamsString]);
+
+  const didApplyUrlKeyRef = React.useRef(false);
 
   const range = React.useMemo(() => {
     if (preset === 'custom') {
@@ -1254,6 +1254,9 @@ export function Dashboards(props: DashboardsProps = {}) {
     if (!list.length) return;
     if (urlKey === selectedKey) return;
     if (!list.some((d) => d.key === urlKey)) return;
+    // Apply URL key only once per mount (deep-link entry). After that, dashboard switching is state-driven.
+    if (didApplyUrlKeyRef.current) return;
+    didApplyUrlKeyRef.current = true;
     setSelectedKey(urlKey);
   }, [urlKey, list, selectedKey]);
 
@@ -1276,15 +1279,10 @@ export function Dashboards(props: DashboardsProps = {}) {
 
   React.useEffect(() => {
     if (!selectedKey) return;
-    // Keep URL in sync for deep-linking without triggering Next navigation.
-    // Use Next router so `useSearchParams()` stays consistent (back/forward + active nav).
-    const sp = new URLSearchParams(searchParamsString);
-    if (sp.get('key') !== selectedKey) {
-      sp.set('key', selectedKey);
-      router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
-    }
+    // IMPORTANT: do NOT rewrite the URL.
+    // `key` is an optional deep-link param; forcing it into the URL causes remount/flash in some app-router setups.
     loadDefinition(selectedKey);
-  }, [selectedKey, loadDefinition, pathname, router, searchParamsString]);
+  }, [selectedKey, loadDefinition]);
 
 
   const resolveProjectNames = React.useCallback(async (ids: string[]) => {
@@ -2526,9 +2524,11 @@ export function Dashboards(props: DashboardsProps = {}) {
                             });
                             return;
                           }
-                          if (action?.href) {
-                            window.location.href = String(action.href);
-                          }
+                        if (action?.href) {
+                          const href = String(action.href);
+                          if (onNavigate) onNavigate(href);
+                          else if (typeof window !== 'undefined') window.location.href = href;
+                        }
                         }}
                         onKeyDown={(e) => {
                           if (!canDrill) return;
@@ -2646,7 +2646,8 @@ export function Dashboards(props: DashboardsProps = {}) {
                 const onSliceClick = async (slice: any) => {
                   const href = typeof slice?.href === 'string' ? slice.href : '';
                   if (!href) return;
-                  if (typeof window !== 'undefined') window.location.href = href;
+                  if (onNavigate) onNavigate(href);
+                  else if (typeof window !== 'undefined') window.location.href = href;
                 };
 
                 return (
@@ -2730,7 +2731,11 @@ export function Dashboards(props: DashboardsProps = {}) {
                                       <tr
                                         key={String(r?.id || idx)}
                                         style={{ borderTop: `1px solid ${colors.border.subtle}`, cursor: href ? 'pointer' : 'default' }}
-                                        onClick={() => { if (href && typeof window !== 'undefined') window.location.href = href; }}
+                                        onClick={() => {
+                                          if (!href) return;
+                                          if (onNavigate) onNavigate(href);
+                                          else if (typeof window !== 'undefined') window.location.href = href;
+                                        }}
                                       >
                                         {cols.map((c: any, j: number) => (
                                           <td key={j} style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
@@ -2914,7 +2919,9 @@ export function Dashboards(props: DashboardsProps = {}) {
                       onClick={() => {
                         if (!drillLastFilter) return;
                         const prefill = encodeReportPrefill({ title: drillTitle, format: drillFormat, pointFilter: drillLastFilter });
-                        window.location.href = `/reports/builder?prefill=${prefill}`;
+                        const href = `/reports/builder?prefill=${prefill}`;
+                        if (onNavigate) onNavigate(href);
+                        else if (typeof window !== 'undefined') window.location.href = href;
                       }}
                     >
                       Open in Report Writer
