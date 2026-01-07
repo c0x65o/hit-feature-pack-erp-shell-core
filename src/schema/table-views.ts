@@ -187,7 +187,7 @@ export type NotificationRead = InferSelectModel<typeof notificationReads>;
 export type InsertNotificationRead = InferInsertModel<typeof notificationReads>;
 
 // NOTE:
-// Dashboard definitions + shares were moved out of dashboard-shell into `@hit/feature-pack-dashboards`
+// Dashboard definitions + shares were moved out of dashboard-shell into `@hit/feature-pack-dashboard-core`
 // to avoid circular dependencies and make dashboards first-class.
 
 // ─────────────────────────────────────────────────────────────────────────────

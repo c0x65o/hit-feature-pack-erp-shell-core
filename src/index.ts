@@ -1,5 +1,5 @@
 /**
- * @hit/feature-pack-dashboard-shell
+ * @hit/feature-pack-erp-shell-core
  *
  * Dashboard shell with sidebar, topbar, notifications, and theme support.
  * Designed to match the erp-mini-dashboard reference design.
@@ -19,7 +19,7 @@ export { erpKit } from './kit';
 export { useUi, UiKitProvider } from '@hit/ui-kit';
 
 // Schema exports - REMOVED from main index to avoid bundling drizzle-orm in client!
-// Use: import { tableViews, ... } from '@hit/feature-pack-dashboard-shell/schema'
+// Use: import { tableViews, ... } from '@hit/feature-pack-erp-shell-core/schema'
 // Don't import from schema file at all - it pulls in drizzle-orm
 
 // Filter operators and value types - defined inline to avoid pulling in schema file
