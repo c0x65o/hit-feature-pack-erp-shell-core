@@ -1,9 +1,9 @@
-# Feature Pack: dashboard-shell
+# Feature Pack: erp-shell-core
 # Provides the dashboard shell (layout, sidebar, topbar, notifications) for HIT apps
 # Also includes the table views system for user-customizable data table views
 
-name: dashboard-shell
-description: Dashboard shell with sidebar, topbar, notifications, theme support, and table views system
+name: erp-shell-core
+description: ERP shell core with sidebar, topbar, notifications, theme support, and table views system
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SCHEMA - Drizzle ORM table definitions

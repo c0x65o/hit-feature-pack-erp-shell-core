@@ -254,7 +254,7 @@ const Button: UiKit['Button'] = ({ variant = 'primary', size = 'md', loading, di
   const heights: Record<'sm' | 'md' | 'lg', string> = { sm: sizing.inputHeightSm, md: sizing.inputHeight, lg: sizing.inputHeightLg };
   const paddings: Record<'sm' | 'md' | 'lg', string> = { sm: '0 12px', md: '0 16px', lg: '0 24px' };
   const fontSizes: Record<'sm' | 'md' | 'lg', string> = { sm: '13px', md: '14px', lg: '15px' };
-  const sizeKey = size ?? 'md';
+  const sizeKey = (size ?? 'md') as 'sm' | 'md' | 'lg';
 
   const variantStyles: Record<string, React.CSSProperties> = {
     primary: {
@@ -775,7 +775,8 @@ const Alert: UiKit['Alert'] = ({ variant = 'default', title, onClose, children }
     info: { Icon: Info, bg: colors.info.muted, border: colors.info.border, color: colors.info.default },
   } as const;
 
-  const { Icon, bg, border, color } = config[variant];
+  const v = (variant ?? 'default') as keyof typeof config;
+  const { Icon, bg, border, color } = config[v];
 
   return React.createElement('div', {
     style: {
