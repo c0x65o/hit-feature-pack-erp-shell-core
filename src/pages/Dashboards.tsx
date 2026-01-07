@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useUi } from '@hit/ui-kit';
 import { AclPicker } from '@hit/ui-kit';
 import { useThemeTokens } from '@hit/ui-kit';
@@ -883,8 +883,6 @@ export function Dashboards(props: DashboardsProps = {}) {
   const { pack: packProp, dashboardKey: dashboardKeyProp } = props;
   const { Page, Card, Button, Dropdown, Select, Input, Modal, Spinner, Badge } = useUi();
   const { colors, radius } = useThemeTokens();
-  const router = useRouter();
-  const pathname = usePathname() ?? '/dashboards';
   const searchParams = useSearchParams();
 
   const [list, setList] = React.useState<DashboardListItem[]>([]);
@@ -1247,35 +1245,46 @@ export function Dashboards(props: DashboardsProps = {}) {
     loadList();
   }, [pack, loadList]);
 
+  // If user navigated with back/forward to a specific ?key=..., honor it.
   React.useEffect(() => {
-    // If user navigated with back/forward to a specific ?key=..., honor it.
-    if (urlKey && urlKey !== selectedKey && list.some((d) => d.key === urlKey)) {
-      setSelectedKey(urlKey);
-      return;
-    }
+    if (!urlKey) return;
+    if (!list.length) return;
+    if (urlKey === selectedKey) return;
+    if (!list.some((d) => d.key === urlKey)) return;
+    setSelectedKey(urlKey);
+  }, [urlKey, list, selectedKey]);
+
+  // Persist last-selected dashboard (global + per-pack) so returning users land where they left off.
+  React.useEffect(() => {
     if (!selectedKey) return;
-    // Persist last-selected dashboard (global + per-pack) so returning users land where they left off.
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(LS_LAST_DASHBOARD_KEY, selectedKey);
+      const item = list.find((d) => d.key === selectedKey);
+      const p = String(item?.pack || pack || '').trim();
+      if (p) {
+        window.localStorage.setItem(`${LS_LAST_DASHBOARD_KEY_BY_PACK_PREFIX}${p}`, selectedKey);
+        window.localStorage.setItem(LS_LAST_DASHBOARD_PACK, p);
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedKey, list, pack]);
+
+  React.useEffect(() => {
+    if (!selectedKey) return;
+    // Keep URL in sync for deep-linking without triggering Next navigation.
+    // (router.replace on search-param changes can cause remount/suspense flashes in some setups.)
     if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(LS_LAST_DASHBOARD_KEY, selectedKey);
-        const item = list.find((d) => d.key === selectedKey);
-        const p = String(item?.pack || pack || '').trim();
-        if (p) {
-          window.localStorage.setItem(`${LS_LAST_DASHBOARD_KEY_BY_PACK_PREFIX}${p}`, selectedKey);
-          window.localStorage.setItem(LS_LAST_DASHBOARD_PACK, p);
-        }
-      } catch {
-        // ignore
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get('key') !== selectedKey) {
+        sp.set('key', selectedKey);
+        const next = `${window.location.pathname}?${sp.toString()}`;
+        window.history.replaceState({}, '', next);
       }
     }
-    // Keep URL in sync for deep-linking, but via Next router to avoid desync with app state.
-    const sp = new URLSearchParams(searchParams?.toString() || '');
-    if (sp.get('key') !== selectedKey) {
-      sp.set('key', selectedKey);
-      router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
-    }
     loadDefinition(selectedKey);
-  }, [selectedKey, urlKey, list, pack, loadDefinition, pathname, router, searchParams]);
+  }, [selectedKey, loadDefinition]);
 
 
   const resolveProjectNames = React.useCallback(async (ids: string[]) => {
