@@ -309,8 +309,6 @@ function NavItemComponent({ item, level = 0, activePath, onNavigate }: NavItemCo
     } else if (item.path) {
       if (onNavigate) {
         onNavigate(item.path);
-      } else if (typeof window !== 'undefined') {
-        window.location.href = item.path;
       }
     }
   };
@@ -431,8 +429,6 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
     if (!hasChildren && item.path) {
       if (onNavigate) {
         onNavigate(item.path);
-      } else if (typeof window !== 'undefined') {
-        window.location.href = item.path;
       }
     }
   };
@@ -440,8 +436,6 @@ function CollapsedNavItem({ item, activePath, onNavigate, isOpen, onOpen, onStar
   const handleChildClick = (path: string) => {
     if (onNavigate) {
       onNavigate(path);
-    } else if (typeof window !== 'undefined') {
-      window.location.href = path;
     }
   };
 

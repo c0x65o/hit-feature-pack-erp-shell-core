@@ -69,19 +69,8 @@ api:
       handler: "@hit/feature-pack-dashboard-shell/server/api/table-data-grouped-buckets"
       description: "Fetch grouped rows for a segment bucket column (tableId+columnKey) via metrics-core + providers"
 
-    # Dashboards v0 (view-only) — DB-backed definitions + ACL shares
-    - path: /api/dashboard-definitions
-      methods: [GET, POST]
-      handler: "@hit/feature-pack-dashboard-shell/server/api/dashboard-definitions"
-      description: "List dashboard definitions visible to the user (GET) or create a dashboard definition (POST)"
-    - path: /api/dashboard-definitions/[key]
-      methods: [GET, PUT]
-      handler: "@hit/feature-pack-dashboard-shell/server/api/dashboard-definitions-key"
-      description: "Get a dashboard definition (GET) or update a user-owned definition (PUT)"
-    - path: /api/dashboard-definitions/[key]/shares
-      methods: [GET, POST, DELETE]
-      handler: "@hit/feature-pack-dashboard-shell/server/api/dashboard-definitions-shares"
-      description: "List/add/remove share entries for a dashboard definition (ACL)"
+    # Dashboards + Reports moved to dedicated feature packs:
+    # - @hit/feature-pack-dashboards owns /api/dashboard-definitions*
 
     # Nexus (AI routing) — compile-time pack options + tool surfaces
     - path: /api/nexus/options
@@ -94,15 +83,6 @@ api:
       description: "Tool surface for a given feature pack (from .hit/generated/capabilities.json)"
 
 routes:
-  - path: /dashboards
-    page: Dashboards
-    roles: []
-  - path: /reports
-    page: Reports
-    roles: []
-  - path: /reports/builder
-    page: ReportBuilder
-    roles: []
   - path: /logs/errors
     page: ErrorLog
     roles: [admin]

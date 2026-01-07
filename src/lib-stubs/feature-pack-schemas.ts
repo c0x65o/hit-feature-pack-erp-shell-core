@@ -19,15 +19,6 @@ export {
   FILTER_VALUE_TYPES,
   type FilterOperator,
   type FilterValueType,
-  // Dashboard definitions
-  dashboardDefinitions,
-  dashboardDefinitionShares,
-  dashboardDefinitionsRelations,
-  dashboardDefinitionSharesRelations,
-  type DashboardDefinition,
-  type DashboardDefinitionShare,
-  type InsertDashboardDefinition,
-  type InsertDashboardDefinitionShare,
   // Notification reads
   notificationReads,
   type NotificationRead,

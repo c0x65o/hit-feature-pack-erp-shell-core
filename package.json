@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-dashboard-shell",
-  "version": "1.0.158",
+  "version": "1.0.159",
   "description": "A HIT feature pack",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -47,6 +47,8 @@
   },
   "peerDependencies": {
     "@hit/acl-utils": "*",
+    "@hit/feature-pack-dashboards": "*",
+    "@hit/feature-pack-reports": "*",
     "@hit/sdk": "*",
     "@hit/ui-kit": "*",
     "drizzle-orm": "^0.38.0",
@@ -59,6 +61,8 @@
   },
   "devDependencies": {
     "@hit/acl-utils": "file:../hit-acl-utils",
+    "@hit/feature-pack-dashboards": "file:../hit-feature-pack-dashboards",
+    "@hit/feature-pack-reports": "file:../hit-feature-pack-reports",
     "@hit/sdk": "file:../../hit-sdks/hit-sdk-typescript",
     "@hit/ui-kit": "file:../hit-ui-kit",
     "@types/js-yaml": "^4.0.9",
