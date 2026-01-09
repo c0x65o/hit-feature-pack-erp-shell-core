@@ -11,7 +11,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { Monitor, Moon, Sun, X, RotateCw, Camera, Trash2 } from 'lucide-react';
-import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit, clearUserAvatarCache } from '@hit/ui-kit';
+import { ThemeProvider, useThemeTokens, useTheme, styles, clearUserAvatarCache } from '@hit/ui-kit';
 import type { NavItem, ShellUser, Notification, ShellConfig, ConnectionStatus } from '../types';
 import { LucideIcon } from '../utils/lucide-dynamic';
 import { ProfilePictureCropModal } from '@hit/feature-pack-auth-core';
@@ -2492,7 +2492,7 @@ function ShellContent({
             onClick={() => { setShowNotifications(false); setShowProfileMenu(false); }}
           >
             <div style={styles({ maxWidth: '1280px', margin: '0 auto' })}>
-              <UiKitProvider kit={defaultKit}>{children as any}</UiKitProvider>
+              {children}
             </div>
           </main>
         </div>

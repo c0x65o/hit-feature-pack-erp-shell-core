@@ -3,7 +3,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { Menu, Bell, User, Settings, LogOut, ChevronRight, ChevronDown, } from 'lucide-react';
 import { Monitor, Moon, Sun, X, RotateCw, Camera, Trash2 } from 'lucide-react';
-import { UiKitProvider, ThemeProvider, useThemeTokens, useTheme, styles, defaultKit, clearUserAvatarCache } from '@hit/ui-kit';
+import { ThemeProvider, useThemeTokens, useTheme, styles, clearUserAvatarCache } from '@hit/ui-kit';
 import { LucideIcon } from '../utils/lucide-dynamic';
 import { ProfilePictureCropModal } from '@hit/feature-pack-auth-core';
 const ShellContext = createContext(null);
@@ -1839,7 +1839,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                     overflow: 'auto',
                                     padding: spacing['2xl'],
                                     backgroundColor: colors.bg.page,
-                                }), onClick: () => { setShowNotifications(false); setShowProfileMenu(false); }, children: _jsx("div", { style: styles({ maxWidth: '1280px', margin: '0 auto' }), children: _jsx(UiKitProvider, { kit: defaultKit, children: children }) }) })] })] }), showAppearanceModal && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: closeAppearance, style: styles({
+                                }), onClick: () => { setShowNotifications(false); setShowProfileMenu(false); }, children: _jsx("div", { style: styles({ maxWidth: '1280px', margin: '0 auto' }), children: children }) })] })] }), showAppearanceModal && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: closeAppearance, style: styles({
                             position: 'fixed',
                             inset: 0,
                             backgroundColor: 'rgba(0,0,0,0.55)',
