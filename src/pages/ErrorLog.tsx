@@ -125,7 +125,7 @@ export function ErrorLog() {
         params.set('q', searchQuery);
       }
 
-      const res = await fetch(`/api/audit-core/audit?${params.toString()}`);
+      const res = await fetch(`/api/audit/audit?${params.toString()}`);
       if (!res.ok) {
         throw new Error(`Failed to fetch: ${res.status}`);
       }
