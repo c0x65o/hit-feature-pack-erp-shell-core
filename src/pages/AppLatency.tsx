@@ -1,28 +1,55 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import {
-  useUi,
-  useLatencyLog,
-  formatDuration,
-  getLatencySeverity,
-  type LatencyLogEntry,
-  type LatencySource,
-} from '@hit/ui-kit';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useUi } from '@hit/ui-kit';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
-type SortField = 'timestamp' | 'durationMs' | 'source' | 'endpoint';
+interface AuditEvent {
+  id: string;
+  entityKind: string;
+  entityId: string | null;
+  action: string;
+  summary: string;
+  details: {
+    requestBody?: unknown;
+    responseBody?: unknown;
+    responseStatus?: number;
+    durationMs?: number;
+  } | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorType: string;
+  correlationId: string | null;
+  packName: string | null;
+  method: string | null;
+  path: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+interface AuditResponse {
+  items: AuditEvent[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+type SortField = 'createdAt' | 'durationMs' | 'path';
 type SortDirection = 'asc' | 'desc';
-type SourceFilter = 'all' | LatencySource;
 
 // =============================================================================
 // HELPERS
 // =============================================================================
 
-function formatDate(date: Date): string {
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
   return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -33,7 +60,8 @@ function formatDate(date: Date): string {
   });
 }
 
-function formatRelativeTime(date: Date): string {
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSecs = Math.floor(diffMs / 1000);
@@ -47,57 +75,37 @@ function formatRelativeTime(date: Date): string {
   return `${diffDays}d ago`;
 }
 
-function getSourceLabel(source: LatencySource): string {
-  switch (source) {
-    case 'db':
-      return 'Database';
-    case 'module':
-      return 'Module';
-    case 'api':
-      return 'API';
-    default:
-      return 'Other';
-  }
+function formatDuration(ms: number | undefined | null): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function getSourceIcon(source: LatencySource): string {
-  switch (source) {
-    case 'db':
-      return '🗄️';
-    case 'module':
-      return '📦';
-    case 'api':
-      return '🌐';
-    default:
-      return '⚙️';
-  }
+function getSeverity(ms: number | undefined, threshold: number): 'fast' | 'normal' | 'slow' | 'critical' {
+  if (ms == null) return 'normal';
+  if (ms < threshold * 0.5) return 'fast';
+  if (ms < threshold) return 'normal';
+  if (ms < threshold * 2) return 'slow';
+  return 'critical';
 }
 
-function getSeverityColor(severity: ReturnType<typeof getLatencySeverity>): string {
+function getSeverityColor(severity: string): string {
   switch (severity) {
-    case 'fast':
-      return '#22c55e';
-    case 'normal':
-      return '#3b82f6';
-    case 'slow':
-      return '#f59e0b';
-    case 'critical':
-    default:
-      return '#ef4444';
+    case 'fast': return '#22c55e';
+    case 'normal': return '#3b82f6';
+    case 'slow': return '#f59e0b';
+    case 'critical': return '#ef4444';
+    default: return '#6366f1';
   }
 }
 
-function getSeverityBadgeVariant(severity: ReturnType<typeof getLatencySeverity>): 'success' | 'info' | 'warning' | 'error' {
+function getSeverityBadgeVariant(severity: string): 'success' | 'info' | 'warning' | 'error' {
   switch (severity) {
-    case 'fast':
-      return 'success';
-    case 'normal':
-      return 'info';
-    case 'slow':
-      return 'warning';
-    case 'critical':
-    default:
-      return 'error';
+    case 'fast': return 'success';
+    case 'normal': return 'info';
+    case 'slow': return 'warning';
+    case 'critical': return 'error';
+    default: return 'info';
   }
 }
 
@@ -106,129 +114,76 @@ function getSeverityBadgeVariant(severity: ReturnType<typeof getLatencySeverity>
 // =============================================================================
 
 export function AppLatency() {
-  const { Page, Card, Button, Input, Badge, Modal, EmptyState, Tabs, Alert } = useUi();
-  const latencyLog = useLatencyLog();
-  const {
-    entries,
-    enabled,
-    maxEntries,
-    slowThresholdMs,
-    clearEntries,
-    clearEntry,
-    setEnabled,
-    setSlowThreshold,
-    exportEntries,
-  } = latencyLog;
+  const { Page, Card, Button, Input, Badge, Modal, EmptyState, Spinner, Tabs, Alert } = useUi();
 
-  // State
+  // Data state
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 50, total: 0, totalPages: 0 });
+
+  // Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [showSlowOnly, setShowSlowOnly] = useState(false);
-  const [sortField, setSortField] = useState<SortField>('timestamp');
+  const [slowThresholdMs, setSlowThresholdMs] = useState(1000);
+  const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [selectedEntry, setSelectedEntry] = useState<LatencyLogEntry | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
   const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [newThreshold, setNewThreshold] = useState(String(slowThresholdMs));
 
-  // Filtered and sorted entries
-  const filteredEntries = useMemo(() => {
-    let result = [...entries];
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (e) =>
-          e.endpoint.toLowerCase().includes(query) ||
-          e.moduleName?.toLowerCase().includes(query) ||
-          e.tableName?.toLowerCase().includes(query) ||
-          e.pageUrl.toLowerCase().includes(query)
-      );
-    }
-
-    // Source filter
-    if (sourceFilter !== 'all') {
-      result = result.filter((e) => e.source === sourceFilter);
-    }
-
-    // Slow only filter
-    if (showSlowOnly) {
-      result = result.filter((e) => e.isSlow);
-    }
-
-    // Sort
-    result.sort((a, b) => {
-      let cmp = 0;
-      switch (sortField) {
-        case 'timestamp':
-          cmp = a.timestamp.getTime() - b.timestamp.getTime();
-          break;
-        case 'durationMs':
-          cmp = a.durationMs - b.durationMs;
-          break;
-        case 'source':
-          cmp = a.source.localeCompare(b.source);
-          break;
-        case 'endpoint':
-          cmp = a.endpoint.localeCompare(b.endpoint);
-          break;
+  // Fetch data from audit API
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set('pageSize', String(pagination.pageSize));
+      params.set('page', String(pagination.page));
+      
+      // Only show events with duration data
+      if (showSlowOnly) {
+        params.set('minDuration', String(slowThresholdMs));
       }
-      return sortDirection === 'asc' ? cmp : -cmp;
-    });
+      
+      if (searchQuery) {
+        params.set('q', searchQuery);
+      }
 
-    return result;
-  }, [entries, searchQuery, sourceFilter, showSlowOnly, sortField, sortDirection]);
+      const res = await fetch(`/api/audit-core/audit?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch: ${res.status}`);
+      }
+      const data: AuditResponse = await res.json();
+      // Filter to only events that have duration data
+      const withDuration = data.items.filter((e) => e.details?.durationMs != null);
+      setEvents(withDuration);
+      setPagination(data.pagination);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.pageSize, showSlowOnly, slowThresholdMs, searchQuery]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
 
   // Stats
   const stats = useMemo(() => {
-    const total = entries.length;
-    const slowCount = entries.filter((e: LatencyLogEntry) => e.isSlow).length;
-    const dbCount = entries.filter((e: LatencyLogEntry) => e.source === 'db').length;
-    const moduleCount = entries.filter((e: LatencyLogEntry) => e.source === 'module').length;
-    const apiCount = entries.filter((e: LatencyLogEntry) => e.source === 'api').length;
-
-    // Average durations by source
-    const avgBySource: Record<LatencySource, { total: number; count: number }> = {
-      db: { total: 0, count: 0 },
-      module: { total: 0, count: 0 },
-      api: { total: 0, count: 0 },
-      other: { total: 0, count: 0 },
-    };
-
-    entries.forEach((e: LatencyLogEntry) => {
-      avgBySource[e.source].total += e.durationMs;
-      avgBySource[e.source].count += 1;
-    });
-
-    const avgDb = avgBySource.db.count > 0 ? avgBySource.db.total / avgBySource.db.count : 0;
-    const avgModule = avgBySource.module.count > 0 ? avgBySource.module.total / avgBySource.module.count : 0;
-    const avgApi = avgBySource.api.count > 0 ? avgBySource.api.total / avgBySource.api.count : 0;
-
-    // Overall average
-    const overallAvg = total > 0 ? entries.reduce((sum: number, e: LatencyLogEntry) => sum + e.durationMs, 0) / total : 0;
-
-    // P95 latency
-    const sortedDurations = [...entries].map((e: LatencyLogEntry) => e.durationMs).sort((a, b) => a - b);
+    const total = events.length;
+    const slowCount = events.filter((e) => (e.details?.durationMs || 0) >= slowThresholdMs).length;
+    const durations = events.map((e) => e.details?.durationMs || 0).filter((d) => d > 0);
+    const avgLatency = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+    const sortedDurations = [...durations].sort((a, b) => a - b);
     const p95Index = Math.floor(sortedDurations.length * 0.95);
     const p95 = sortedDurations[p95Index] || 0;
-
-    return {
-      total,
-      slowCount,
-      dbCount,
-      moduleCount,
-      apiCount,
-      avgDb,
-      avgModule,
-      avgApi,
-      overallAvg,
-      p95,
-    };
-  }, [entries]);
+    return { total, slowCount, avgLatency, p95 };
+  }, [events, slowThresholdMs]);
 
   const handleExport = () => {
-    const json = exportEntries();
+    const json = JSON.stringify(events, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -238,15 +193,10 @@ export function AppLatency() {
     URL.revokeObjectURL(url);
   };
 
-  const handleClearAll = () => {
-    clearEntries();
-    setShowClearConfirm(false);
-  };
-
   const handleSetThreshold = () => {
     const ms = parseInt(newThreshold, 10);
     if (!isNaN(ms) && ms > 0) {
-      setSlowThreshold(ms);
+      setSlowThresholdMs(ms);
       setShowThresholdModal(false);
     }
   };
@@ -299,7 +249,7 @@ export function AppLatency() {
   return (
     <Page
       title="App Latency"
-      description={`Track slow queries and API response times (threshold: ${slowThresholdMs}ms)`}
+      description={`Track API response times (threshold: ${slowThresholdMs}ms)`}
     >
       {/* Stats Cards */}
       <div
@@ -319,7 +269,7 @@ export function AppLatency() {
                 fontFamily: 'JetBrains Mono, monospace',
               }}
             >
-              {stats.total}
+              {pagination.total}
             </div>
             <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Total Requests</div>
           </div>
@@ -349,7 +299,7 @@ export function AppLatency() {
                 fontFamily: 'JetBrains Mono, monospace',
               }}
             >
-              {formatDuration(stats.overallAvg)}
+              {formatDuration(stats.avgLatency)}
             </div>
             <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Avg Latency</div>
           </div>
@@ -371,65 +321,6 @@ export function AppLatency() {
         </Card>
       </div>
 
-      {/* Source Breakdown */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 12,
-          padding: '0 16px 16px',
-        }}
-      >
-        <Card>
-          <div style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 20 }}>🗄️</span>
-              <span style={{ fontWeight: 600 }}>Database</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ opacity: 0.7 }}>Count:</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.dbCount}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ opacity: 0.7 }}>Avg:</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatDuration(stats.avgDb)}</span>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 20 }}>📦</span>
-              <span style={{ fontWeight: 600 }}>Modules</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ opacity: 0.7 }}>Count:</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.moduleCount}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ opacity: 0.7 }}>Avg:</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatDuration(stats.avgModule)}</span>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 20 }}>🌐</span>
-              <span style={{ fontWeight: 600 }}>API Calls</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ opacity: 0.7 }}>Count:</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{stats.apiCount}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ opacity: 0.7 }}>Avg:</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatDuration(stats.avgApi)}</span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
       {/* Controls */}
       <div
         style={{
@@ -442,32 +333,22 @@ export function AppLatency() {
       >
         <div style={{ flex: '1 1 200px', minWidth: 200 }}>
           <Input
-            placeholder="Search endpoints, modules, tables..."
+            placeholder="Search paths, summaries..."
             value={searchQuery}
-            onChange={(v: string | React.ChangeEvent<HTMLInputElement>) =>
-              setSearchQuery(typeof v === 'string' ? v : v.target?.value ?? '')
-            }
+            onChange={(v: string | React.ChangeEvent<HTMLInputElement>) => {
+              setSearchQuery(typeof v === 'string' ? v : v.target?.value ?? '');
+              setPagination((p) => ({ ...p, page: 1 }));
+            }}
           />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, opacity: 0.7 }}>Source:</span>
-          {(['all', 'db', 'module', 'api'] as const).map((s) => (
-            <Button
-              key={s}
-              variant={sourceFilter === s ? 'primary' : 'secondary'}
-              onClick={() => setSourceFilter(s)}
-              style={{ fontSize: 12, padding: '4px 10px' }}
-            >
-              {s === 'all' ? 'All' : getSourceLabel(s as LatencySource)}
-            </Button>
-          ))}
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Button
             variant={showSlowOnly ? 'primary' : 'secondary'}
-            onClick={() => setShowSlowOnly(!showSlowOnly)}
+            onClick={() => {
+              setShowSlowOnly(!showSlowOnly);
+              setPagination((p) => ({ ...p, page: 1 }));
+            }}
             style={{ fontSize: 12, padding: '4px 10px' }}
           >
             🐌 Slow Only
@@ -482,32 +363,20 @@ export function AppLatency() {
           >
             ⚙️ Threshold
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setEnabled(!enabled)}
-            style={{ fontSize: 12 }}
-          >
-            {enabled ? '⏸ Pause' : '▶ Resume'}
+          <Button variant="secondary" onClick={fetchEvents} style={{ fontSize: 12 }}>
+            ↻ Refresh
           </Button>
           <Button variant="secondary" onClick={handleExport} style={{ fontSize: 12 }}>
             Export JSON
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setShowClearConfirm(true)}
-            disabled={entries.length === 0}
-            style={{ fontSize: 12 }}
-          >
-            Clear All
-          </Button>
         </div>
       </div>
 
-      {/* Status Banner */}
-      {!enabled && (
+      {/* Error Banner */}
+      {error && (
         <div style={{ padding: '0 16px 16px' }}>
-          <Alert variant="warning" title="Logging Paused">
-            Latency logging is currently paused. New requests will not be captured.
+          <Alert variant="error" title="Failed to load">
+            {error}
           </Alert>
         </div>
       )}
@@ -515,15 +384,15 @@ export function AppLatency() {
       {/* Latency Table */}
       <div style={{ padding: '0 16px 16px' }}>
         <Card>
-          {filteredEntries.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <Spinner />
+            </div>
+          ) : events.length === 0 ? (
             <div style={{ padding: 40 }}>
               <EmptyState
-                title={entries.length === 0 ? 'No Requests Captured' : 'No Matching Requests'}
-                description={
-                  entries.length === 0
-                    ? 'Latency data will appear here when requests are tracked.'
-                    : 'Try adjusting your search or filters.'
-                }
+                title="No Requests Found"
+                description="Latency data will appear here when requests are logged."
               />
             </div>
           ) : (
@@ -531,31 +400,28 @@ export function AppLatency() {
               <table style={tableStyles}>
                 <thead>
                   <tr>
-                    <th style={thStyles} onClick={() => handleSort('timestamp')}>
-                      Time {sortIndicator('timestamp')}
+                    <th style={thStyles} onClick={() => handleSort('createdAt')}>
+                      Time {sortIndicator('createdAt')}
                     </th>
-                    <th style={thStyles} onClick={() => handleSort('source')}>
-                      Source {sortIndicator('source')}
+                    <th style={thStyles}>Method</th>
+                    <th style={thStyles} onClick={() => handleSort('path')}>
+                      Path {sortIndicator('path')}
                     </th>
-                    <th style={thStyles} onClick={() => handleSort('endpoint')}>
-                      Endpoint {sortIndicator('endpoint')}
-                    </th>
-                    <th style={thStyles}>Target</th>
+                    <th style={thStyles}>User</th>
                     <th style={thStyles} onClick={() => handleSort('durationMs')}>
                       Duration {sortIndicator('durationMs')}
                     </th>
                     <th style={thStyles}>Status</th>
-                    <th style={{ ...thStyles, width: 60 }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.map((entry) => {
-                    const severity = getLatencySeverity(entry.durationMs, slowThresholdMs);
+                  {events.map((event) => {
+                    const severity = getSeverity(event.details?.durationMs, slowThresholdMs);
                     return (
                       <tr
-                        key={entry.id}
+                        key={event.id}
                         style={rowStyles}
-                        onClick={() => setSelectedEntry(entry)}
+                        onClick={() => setSelectedEvent(event)}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = 'rgba(148,163,184,0.08)';
                         }}
@@ -564,29 +430,28 @@ export function AppLatency() {
                         }}
                       >
                         <td style={tdStyles}>
-                          <div style={{ whiteSpace: 'nowrap' }}>{formatRelativeTime(entry.timestamp)}</div>
+                          <div style={{ whiteSpace: 'nowrap' }}>{formatRelativeTime(event.createdAt)}</div>
                           <div style={{ fontSize: 11, opacity: 0.6 }}>
-                            {formatDate(entry.timestamp).split(',')[1]}
+                            {formatDate(event.createdAt).split(',')[1]}
                           </div>
                         </td>
                         <td style={tdStyles}>
-                          <span style={{ marginRight: 6 }}>{getSourceIcon(entry.source)}</span>
-                          <Badge variant="default">{getSourceLabel(entry.source)}</Badge>
+                          <Badge variant="default">{event.method || '—'}</Badge>
                         </td>
                         <td style={tdStyles}>
                           <span
                             style={{
                               fontFamily: 'JetBrains Mono, monospace',
                               fontSize: 12,
-                              maxWidth: 250,
+                              maxWidth: 300,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                               display: 'block',
                             }}
-                            title={entry.endpoint}
+                            title={event.path || ''}
                           >
-                            {entry.endpoint}
+                            {event.path || '—'}
                           </span>
                         </td>
                         <td style={tdStyles}>
@@ -594,10 +459,10 @@ export function AppLatency() {
                             style={{
                               fontFamily: 'JetBrains Mono, monospace',
                               fontSize: 12,
-                              opacity: entry.moduleName || entry.tableName ? 1 : 0.5,
+                              opacity: event.actorName ? 1 : 0.5,
                             }}
                           >
-                            {entry.moduleName || entry.tableName || '—'}
+                            {event.actorName || event.actorId || '—'}
                           </span>
                         </td>
                         <td style={tdStyles}>
@@ -609,25 +474,13 @@ export function AppLatency() {
                               color: getSeverityColor(severity),
                             }}
                           >
-                            {formatDuration(entry.durationMs)}
+                            {formatDuration(event.details?.durationMs)}
                           </span>
                         </td>
                         <td style={tdStyles}>
                           <Badge variant={getSeverityBadgeVariant(severity)}>
                             {severity}
                           </Badge>
-                        </td>
-                        <td style={tdStyles}>
-                          <Button
-                            variant="secondary"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              clearEntry(entry.id);
-                            }}
-                            style={{ fontSize: 11, padding: '4px 8px' }}
-                          >
-                            ✕
-                          </Button>
                         </td>
                       </tr>
                     );
@@ -639,13 +492,36 @@ export function AppLatency() {
         </Card>
       </div>
 
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div style={{ padding: '0 16px 16px', display: 'flex', justifyContent: 'center', gap: 8 }}>
+          <Button
+            variant="secondary"
+            disabled={pagination.page <= 1}
+            onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
+          >
+            ← Previous
+          </Button>
+          <span style={{ padding: '8px 16px', fontSize: 13 }}>
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+          <Button
+            variant="secondary"
+            disabled={pagination.page >= pagination.totalPages}
+            onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
+          >
+            Next →
+          </Button>
+        </div>
+      )}
+
       {/* Entry Detail Modal */}
       <Modal
-        open={!!selectedEntry}
-        onClose={() => setSelectedEntry(null)}
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
         title="Request Details"
       >
-        {selectedEntry && (
+        {selectedEvent && (
           <div style={{ padding: 16 }}>
             <Tabs
               tabs={[
@@ -654,38 +530,23 @@ export function AppLatency() {
                   label: 'Overview',
                   content: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-                      <DetailRow label="Timestamp" value={formatDate(selectedEntry.timestamp)} />
-                      <DetailRow label="Duration" value={formatDuration(selectedEntry.durationMs)} />
-                      <DetailRow label="Source" value={getSourceLabel(selectedEntry.source)} />
-                      <DetailRow label="Endpoint" value={selectedEntry.endpoint} mono />
-                      {selectedEntry.method && (
-                        <DetailRow label="Method" value={selectedEntry.method} />
-                      )}
-                      {selectedEntry.moduleName && (
-                        <DetailRow label="Module" value={selectedEntry.moduleName} mono />
-                      )}
-                      {selectedEntry.tableName && (
-                        <DetailRow label="Table" value={selectedEntry.tableName} mono />
-                      )}
-                      {selectedEntry.queryType && (
-                        <DetailRow label="Query Type" value={selectedEntry.queryType} />
-                      )}
-                      {selectedEntry.status !== undefined && (
-                        <DetailRow label="Status" value={String(selectedEntry.status)} />
-                      )}
-                      {selectedEntry.responseSize !== undefined && (
-                        <DetailRow label="Response Size" value={`${selectedEntry.responseSize} bytes`} />
-                      )}
-                      <DetailRow label="Page URL" value={selectedEntry.pageUrl} mono />
+                      <DetailRow label="Timestamp" value={formatDate(selectedEvent.createdAt)} />
+                      <DetailRow label="Duration" value={formatDuration(selectedEvent.details?.durationMs)} />
+                      <DetailRow label="Method" value={selectedEvent.method || '—'} />
+                      <DetailRow label="Path" value={selectedEvent.path || '—'} mono />
+                      <DetailRow label="User" value={selectedEvent.actorName || selectedEvent.actorId || 'Anonymous'} />
+                      <DetailRow label="Status" value={String(selectedEvent.details?.responseStatus || '—')} />
+                      <DetailRow label="Entity" value={`${selectedEvent.entityKind}${selectedEvent.entityId ? ` #${selectedEvent.entityId}` : ''}`} />
+                      <DetailRow label="Pack" value={selectedEvent.packName || '—'} />
                     </div>
                   ),
                 },
                 {
-                  id: 'payload',
-                  label: 'Payload',
+                  id: 'request',
+                  label: 'Request',
                   content: (
                     <div style={{ paddingTop: 16 }}>
-                      {selectedEntry.payload ? (
+                      {selectedEvent.details?.requestBody ? (
                         <pre
                           style={{
                             background: 'rgba(0,0,0,0.2)',
@@ -697,20 +558,20 @@ export function AppLatency() {
                             maxHeight: 300,
                           }}
                         >
-                          {JSON.stringify(selectedEntry.payload, null, 2)}
+                          {JSON.stringify(selectedEvent.details.requestBody, null, 2)}
                         </pre>
                       ) : (
-                        <div style={{ opacity: 0.6, fontSize: 13 }}>No payload captured.</div>
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No request body captured.</div>
                       )}
                     </div>
                   ),
                 },
                 {
-                  id: 'metadata',
-                  label: 'Metadata',
+                  id: 'response',
+                  label: 'Response',
                   content: (
                     <div style={{ paddingTop: 16 }}>
-                      {selectedEntry.metadata && Object.keys(selectedEntry.metadata).length > 0 ? (
+                      {selectedEvent.details?.responseBody ? (
                         <pre
                           style={{
                             background: 'rgba(0,0,0,0.2)',
@@ -722,10 +583,10 @@ export function AppLatency() {
                             maxHeight: 300,
                           }}
                         >
-                          {JSON.stringify(selectedEntry.metadata, null, 2)}
+                          {JSON.stringify(selectedEvent.details.responseBody, null, 2)}
                         </pre>
                       ) : (
-                        <div style={{ opacity: 0.6, fontSize: 13 }}>No additional metadata.</div>
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No response body captured.</div>
                       )}
                     </div>
                   ),
@@ -734,26 +595,6 @@ export function AppLatency() {
             />
           </div>
         )}
-      </Modal>
-
-      {/* Clear Confirmation Modal */}
-      <Modal
-        open={showClearConfirm}
-        onClose={() => setShowClearConfirm(false)}
-        title="Clear All Entries?"
-      >
-        <div style={{ padding: 16 }}>
-          <p style={{ marginBottom: 16 }}>
-            This will permanently delete all {entries.length} logged entries. This action cannot be
-            undone.
-          </p>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setShowClearConfirm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleClearAll}>Clear All</Button>
-          </div>
-        </div>
       </Modal>
 
       {/* Threshold Settings Modal */}

@@ -1,20 +1,55 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useUi, useErrorLog, type ErrorLogEntry } from '@hit/ui-kit';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useUi } from '@hit/ui-kit';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
-type SortField = 'timestamp' | 'status' | 'userEmail' | 'pageUrl';
+interface AuditEvent {
+  id: string;
+  entityKind: string;
+  entityId: string | null;
+  action: string;
+  summary: string;
+  details: {
+    requestBody?: unknown;
+    responseBody?: unknown;
+    responseStatus?: number;
+    durationMs?: number;
+  } | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorType: string;
+  correlationId: string | null;
+  packName: string | null;
+  method: string | null;
+  path: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+interface AuditResponse {
+  items: AuditEvent[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+type SortField = 'createdAt' | 'status' | 'actorName' | 'path';
 type SortDirection = 'asc' | 'desc';
 
 // =============================================================================
 // HELPERS
 // =============================================================================
 
-function formatDate(date: Date): string {
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
   return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -25,7 +60,8 @@ function formatDate(date: Date): string {
   });
 }
 
-function formatRelativeTime(date: Date): string {
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSecs = Math.floor(diffMs / 1000);
@@ -39,15 +75,15 @@ function formatRelativeTime(date: Date): string {
   return `${diffDays}d ago`;
 }
 
-function getStatusBadgeVariant(status: number): 'error' | 'warning' | 'info' | 'default' {
-  if (status === 0) return 'warning'; // Network error
+function getStatusBadgeVariant(status: number | undefined): 'error' | 'warning' | 'info' | 'default' {
+  if (!status || status === 0) return 'warning';
   if (status >= 500) return 'error';
   if (status >= 400) return 'warning';
   return 'info';
 }
 
-function getStatusLabel(status: number): string {
-  if (status === 0) return 'Network';
+function getStatusLabel(status: number | undefined): string {
+  if (!status || status === 0) return 'Network';
   return String(status);
 }
 
@@ -57,97 +93,72 @@ function getStatusLabel(status: number): string {
 
 export function ErrorLog() {
   const { Page, Card, Button, Input, Badge, Modal, EmptyState, Spinner, Alert, Tabs } = useUi();
-  const errorLogState = useErrorLog();
-  const {
-    errors,
-    enabled,
-    maxEntries,
-    clearErrors,
-    clearError,
-    setEnabled,
-    exportErrors,
-  } = errorLogState;
-  // Handle backwards compatibility - isProviderAvailable may not exist in older versions
-  const isProviderAvailable = 'isProviderAvailable' in errorLogState 
-    ? (errorLogState as { isProviderAvailable: boolean }).isProviderAvailable 
-    : errors.length > 0 || enabled;
 
-  // State
+  // Data state
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 50, total: 0, totalPages: 0 });
+
+  // Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | '4xx' | '5xx' | 'network'>('all');
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'form' | 'fetch' | 'manual'>('all');
-  const [sortField, setSortField] = useState<SortField>('timestamp');
+  const [statusFilter, setStatusFilter] = useState<'all' | '4xx' | '5xx' | 'error'>('error');
+  const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [selectedError, setSelectedError] = useState<ErrorLogEntry | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
 
-  // Filtered and sorted errors
-  const filteredErrors = useMemo(() => {
-    let result = [...errors];
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (e) =>
-          e.message.toLowerCase().includes(query) ||
-          e.pageUrl.toLowerCase().includes(query) ||
-          e.endpoint?.toLowerCase().includes(query) ||
-          e.userEmail?.toLowerCase().includes(query)
-      );
-    }
-
-    // Status filter
-    if (statusFilter === '4xx') {
-      result = result.filter((e) => e.status >= 400 && e.status < 500);
-    } else if (statusFilter === '5xx') {
-      result = result.filter((e) => e.status >= 500);
-    } else if (statusFilter === 'network') {
-      result = result.filter((e) => e.status === 0);
-    }
-
-    // Source filter
-    if (sourceFilter !== 'all') {
-      result = result.filter((e) => e.source === sourceFilter);
-    }
-
-    // Sort
-    result.sort((a, b) => {
-      let cmp = 0;
-      switch (sortField) {
-        case 'timestamp':
-          cmp = a.timestamp.getTime() - b.timestamp.getTime();
-          break;
-        case 'status':
-          cmp = a.status - b.status;
-          break;
-        case 'userEmail':
-          cmp = (a.userEmail || '').localeCompare(b.userEmail || '');
-          break;
-        case 'pageUrl':
-          cmp = a.pageUrl.localeCompare(b.pageUrl);
-          break;
+  // Fetch data from audit API
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set('pageSize', String(pagination.pageSize));
+      params.set('page', String(pagination.page));
+      
+      // Filter for errors (4xx and 5xx)
+      if (statusFilter !== 'all') {
+        params.set('status', statusFilter);
       }
-      return sortDirection === 'asc' ? cmp : -cmp;
-    });
+      
+      if (searchQuery) {
+        params.set('q', searchQuery);
+      }
 
-    return result;
-  }, [errors, searchQuery, statusFilter, sourceFilter, sortField, sortDirection]);
+      const res = await fetch(`/api/audit-core/audit?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch: ${res.status}`);
+      }
+      const data: AuditResponse = await res.json();
+      setEvents(data.items);
+      setPagination(data.pagination);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.pageSize, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
 
   // Stats
   const stats = useMemo(() => {
-    const total = errors.length;
-    const clientErrors = errors.filter((e: ErrorLogEntry) => e.status >= 400 && e.status < 500).length;
-    const serverErrors = errors.filter((e: ErrorLogEntry) => e.status >= 500).length;
-    const networkErrors = errors.filter((e: ErrorLogEntry) => e.status === 0).length;
-    const last24h = errors.filter(
-      (e: ErrorLogEntry) => e.timestamp.getTime() > Date.now() - 24 * 60 * 60 * 1000
-    ).length;
-    return { total, clientErrors, serverErrors, networkErrors, last24h };
-  }, [errors]);
+    const total = pagination.total;
+    const clientErrors = events.filter((e) => {
+      const s = e.details?.responseStatus;
+      return s && s >= 400 && s < 500;
+    }).length;
+    const serverErrors = events.filter((e) => {
+      const s = e.details?.responseStatus;
+      return s && s >= 500;
+    }).length;
+    return { total, clientErrors, serverErrors };
+  }, [events, pagination.total]);
 
   const handleExport = () => {
-    const json = exportErrors();
+    const json = JSON.stringify(events, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -155,11 +166,6 @@ export function ErrorLog() {
     a.download = `error-log-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handleClearAll = () => {
-    clearErrors();
-    setShowClearConfirm(false);
   };
 
   // Styles
@@ -210,7 +216,7 @@ export function ErrorLog() {
   return (
     <Page
       title="Error Log"
-      description={`API errors captured during this session (max ${maxEntries} entries)`}
+      description="API errors persisted in audit log"
     >
       {/* Stats Cards */}
       <div
@@ -265,21 +271,6 @@ export function ErrorLog() {
             <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>4xx Client</div>
           </div>
         </Card>
-        <Card>
-          <div style={{ padding: '16px 20px', textAlign: 'center' }}>
-            <div
-              style={{
-                fontSize: '28px',
-                fontWeight: 700,
-                color: '#6366f1',
-                fontFamily: 'JetBrains Mono, monospace',
-              }}
-            >
-              {stats.last24h}
-            </div>
-            <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Last 24h</div>
-          </div>
-        </Card>
       </div>
 
       {/* Controls */}
@@ -296,74 +287,45 @@ export function ErrorLog() {
           <Input
             placeholder="Search errors..."
             value={searchQuery}
-            onChange={(v: string | React.ChangeEvent<HTMLInputElement>) => setSearchQuery(typeof v === 'string' ? v : v.target?.value ?? '')}
+            onChange={(v: string | React.ChangeEvent<HTMLInputElement>) => {
+              setSearchQuery(typeof v === 'string' ? v : v.target?.value ?? '');
+              setPagination((p) => ({ ...p, page: 1 }));
+            }}
           />
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 12, opacity: 0.7 }}>Status:</span>
-          {(['all', '4xx', '5xx', 'network'] as const).map((s) => (
+          {(['error', '4xx', '5xx', 'all'] as const).map((s) => (
             <Button
               key={s}
               variant={statusFilter === s ? 'primary' : 'secondary'}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => {
+                setStatusFilter(s);
+                setPagination((p) => ({ ...p, page: 1 }));
+              }}
               style={{ fontSize: 12, padding: '4px 10px' }}
             >
-              {s === 'all' ? 'All' : s === 'network' ? 'Network' : s}
-            </Button>
-          ))}
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, opacity: 0.7 }}>Source:</span>
-          {(['all', 'form', 'fetch'] as const).map((s) => (
-            <Button
-              key={s}
-              variant={sourceFilter === s ? 'primary' : 'secondary'}
-              onClick={() => setSourceFilter(s)}
-              style={{ fontSize: 12, padding: '4px 10px' }}
-            >
-              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              {s === 'error' ? 'All Errors' : s === 'all' ? 'All Events' : s}
             </Button>
           ))}
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <Button
-            variant="secondary"
-            onClick={() => setEnabled(!enabled)}
-            style={{ fontSize: 12 }}
-          >
-            {enabled ? '⏸ Pause' : '▶ Resume'}
+          <Button variant="secondary" onClick={fetchEvents} style={{ fontSize: 12 }}>
+            ↻ Refresh
           </Button>
           <Button variant="secondary" onClick={handleExport} style={{ fontSize: 12 }}>
             Export JSON
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setShowClearConfirm(true)}
-            disabled={errors.length === 0}
-            style={{ fontSize: 12 }}
-          >
-            Clear All
-          </Button>
         </div>
       </div>
 
-      {/* Status Banner */}
-      {!isProviderAvailable && (
+      {/* Error Banner */}
+      {error && (
         <div style={{ padding: '0 16px 16px' }}>
-          <Alert variant="error" title="Provider Not Available">
-            ErrorLogProvider is not wrapping this page. Error logging will not work.
-            This typically happens due to module resolution issues in monorepos.
-            Ensure ErrorLogProvider is in your app&apos;s provider hierarchy.
-          </Alert>
-        </div>
-      )}
-      {isProviderAvailable && !enabled && (
-        <div style={{ padding: '0 16px 16px' }}>
-          <Alert variant="warning" title="Logging Paused">
-            Error logging is currently paused. New errors will not be captured.
+          <Alert variant="error" title="Failed to load">
+            {error}
           </Alert>
         </div>
       )}
@@ -371,15 +333,15 @@ export function ErrorLog() {
       {/* Error Table */}
       <div style={{ padding: '0 16px 16px' }}>
         <Card>
-          {filteredErrors.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <Spinner />
+            </div>
+          ) : events.length === 0 ? (
             <div style={{ padding: 40 }}>
               <EmptyState
-                title={errors.length === 0 ? 'No Errors Captured' : 'No Matching Errors'}
-                description={
-                  errors.length === 0
-                    ? 'API errors will appear here when they occur.'
-                    : 'Try adjusting your search or filters.'
-                }
+                title="No Errors Found"
+                description="API errors will appear here when they are logged."
               />
             </div>
           ) : (
@@ -387,30 +349,29 @@ export function ErrorLog() {
               <table style={tableStyles}>
                 <thead>
                   <tr>
-                    <th style={thStyles} onClick={() => handleSort('timestamp')}>
-                      Time {sortIndicator('timestamp')}
+                    <th style={thStyles} onClick={() => handleSort('createdAt')}>
+                      Time {sortIndicator('createdAt')}
                     </th>
                     <th style={thStyles} onClick={() => handleSort('status')}>
                       Status {sortIndicator('status')}
                     </th>
-                    <th style={thStyles}>Source</th>
-                    <th style={thStyles} onClick={() => handleSort('userEmail')}>
-                      User {sortIndicator('userEmail')}
+                    <th style={thStyles}>Method</th>
+                    <th style={thStyles} onClick={() => handleSort('actorName')}>
+                      User {sortIndicator('actorName')}
                     </th>
-                    <th style={thStyles} onClick={() => handleSort('pageUrl')}>
-                      Page {sortIndicator('pageUrl')}
+                    <th style={thStyles} onClick={() => handleSort('path')}>
+                      Path {sortIndicator('path')}
                     </th>
-                    <th style={thStyles}>Message</th>
+                    <th style={thStyles}>Summary</th>
                     <th style={thStyles}>Duration</th>
-                    <th style={{ ...thStyles, width: 60 }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredErrors.map((err) => (
+                  {events.map((event) => (
                     <tr
-                      key={err.id}
+                      key={event.id}
                       style={rowStyles}
-                      onClick={() => setSelectedError(err)}
+                      onClick={() => setSelectedEvent(event)}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = 'rgba(148,163,184,0.08)';
                       }}
@@ -420,29 +381,29 @@ export function ErrorLog() {
                     >
                       <td style={tdStyles}>
                         <div style={{ whiteSpace: 'nowrap' }}>
-                          {formatRelativeTime(err.timestamp)}
+                          {formatRelativeTime(event.createdAt)}
                         </div>
                         <div style={{ fontSize: 11, opacity: 0.6 }}>
-                          {formatDate(err.timestamp).split(',')[1]}
+                          {formatDate(event.createdAt).split(',')[1]}
                         </div>
                       </td>
                       <td style={tdStyles}>
-                        <Badge variant={getStatusBadgeVariant(err.status)}>
-                          {getStatusLabel(err.status)}
+                        <Badge variant={getStatusBadgeVariant(event.details?.responseStatus)}>
+                          {getStatusLabel(event.details?.responseStatus)}
                         </Badge>
                       </td>
                       <td style={tdStyles}>
-                        <Badge variant="default">{err.source}</Badge>
+                        <Badge variant="default">{event.method || '—'}</Badge>
                       </td>
                       <td style={tdStyles}>
                         <span
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 12,
-                            opacity: err.userEmail ? 1 : 0.5,
+                            opacity: event.actorName ? 1 : 0.5,
                           }}
                         >
-                          {err.userEmail || '—'}
+                          {event.actorName || event.actorId || '—'}
                         </span>
                       </td>
                       <td style={tdStyles}>
@@ -450,15 +411,15 @@ export function ErrorLog() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 12,
-                            maxWidth: 180,
+                            maxWidth: 250,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                             display: 'block',
                           }}
-                          title={err.pageUrl}
+                          title={event.path || ''}
                         >
-                          {err.pageUrl}
+                          {event.path || '—'}
                         </span>
                       </td>
                       <td style={tdStyles}>
@@ -470,9 +431,9 @@ export function ErrorLog() {
                             whiteSpace: 'nowrap',
                             display: 'block',
                           }}
-                          title={err.message}
+                          title={event.summary}
                         >
-                          {err.message}
+                          {event.summary}
                         </span>
                       </td>
                       <td style={tdStyles}>
@@ -480,23 +441,11 @@ export function ErrorLog() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 12,
-                            opacity: err.responseTimeMs ? 1 : 0.5,
+                            opacity: event.details?.durationMs ? 1 : 0.5,
                           }}
                         >
-                          {err.responseTimeMs ? `${err.responseTimeMs}ms` : '—'}
+                          {event.details?.durationMs ? `${event.details.durationMs}ms` : '—'}
                         </span>
-                      </td>
-                      <td style={tdStyles}>
-                        <Button
-                          variant="secondary"
-                          onClick={(e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            clearError(err.id);
-                          }}
-                          style={{ fontSize: 11, padding: '4px 8px' }}
-                        >
-                          ✕
-                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -507,13 +456,36 @@ export function ErrorLog() {
         </Card>
       </div>
 
-      {/* Error Detail Modal */}
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div style={{ padding: '0 16px 16px', display: 'flex', justifyContent: 'center', gap: 8 }}>
+          <Button
+            variant="secondary"
+            disabled={pagination.page <= 1}
+            onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
+          >
+            ← Previous
+          </Button>
+          <span style={{ padding: '8px 16px', fontSize: 13 }}>
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+          <Button
+            variant="secondary"
+            disabled={pagination.page >= pagination.totalPages}
+            onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
+          >
+            Next →
+          </Button>
+        </div>
+      )}
+
+      {/* Event Detail Modal */}
       <Modal
-        open={!!selectedError}
-        onClose={() => setSelectedError(null)}
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
         title="Error Details"
       >
-        {selectedError && (
+        {selectedEvent && (
           <div style={{ padding: 16 }}>
             <Tabs
               tabs={[
@@ -522,54 +494,25 @@ export function ErrorLog() {
                   label: 'Overview',
                   content: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-                      <DetailRow label="Timestamp" value={formatDate(selectedError.timestamp)} />
-                      <DetailRow label="Status" value={getStatusLabel(selectedError.status)} />
-                      <DetailRow label="Source" value={selectedError.source} />
-                      <DetailRow label="User" value={selectedError.userEmail || 'Anonymous'} />
-                      <DetailRow label="Page URL" value={selectedError.pageUrl} mono />
-                      <DetailRow label="Endpoint" value={selectedError.endpoint || '—'} mono />
-                      <DetailRow label="Method" value={selectedError.method || '—'} />
-                      <DetailRow label="Response Time" value={selectedError.responseTimeMs ? `${selectedError.responseTimeMs}ms` : '—'} />
-                      <DetailRow label="Message" value={selectedError.message} />
+                      <DetailRow label="Timestamp" value={formatDate(selectedEvent.createdAt)} />
+                      <DetailRow label="Status" value={getStatusLabel(selectedEvent.details?.responseStatus)} />
+                      <DetailRow label="Method" value={selectedEvent.method || '—'} />
+                      <DetailRow label="Path" value={selectedEvent.path || '—'} mono />
+                      <DetailRow label="User" value={selectedEvent.actorName || selectedEvent.actorId || 'Anonymous'} />
+                      <DetailRow label="Duration" value={selectedEvent.details?.durationMs ? `${selectedEvent.details.durationMs}ms` : '—'} />
+                      <DetailRow label="Summary" value={selectedEvent.summary} />
+                      <DetailRow label="Entity" value={`${selectedEvent.entityKind}${selectedEvent.entityId ? ` #${selectedEvent.entityId}` : ''}`} />
+                      <DetailRow label="Pack" value={selectedEvent.packName || '—'} />
+                      <DetailRow label="IP" value={selectedEvent.ipAddress || '—'} mono />
                     </div>
                   ),
                 },
                 {
-                  id: 'fieldErrors',
-                  label: 'Field Errors',
+                  id: 'request',
+                  label: 'Request',
                   content: (
                     <div style={{ paddingTop: 16 }}>
-                      {selectedError.fieldErrors && Object.keys(selectedError.fieldErrors).length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {Object.entries(selectedError.fieldErrors as Record<string, string>).map(([field, msg]) => (
-                            <div
-                              key={field}
-                              style={{
-                                background: 'rgba(239,68,68,0.1)',
-                                border: '1px solid rgba(239,68,68,0.2)',
-                                borderRadius: 8,
-                                padding: '8px 12px',
-                              }}
-                            >
-                              <strong style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
-                                {field}:
-                              </strong>{' '}
-                              <span style={{ fontSize: 13 }}>{msg}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ opacity: 0.6, fontSize: 13 }}>No field-level errors.</div>
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  id: 'payload',
-                  label: 'Payload',
-                  content: (
-                    <div style={{ paddingTop: 16 }}>
-                      {selectedError.payload ? (
+                      {selectedEvent.details?.requestBody ? (
                         <pre
                           style={{
                             background: 'rgba(0,0,0,0.2)',
@@ -581,36 +524,57 @@ export function ErrorLog() {
                             maxHeight: 300,
                           }}
                         >
-                          {JSON.stringify(selectedError.payload, null, 2)}
+                          {JSON.stringify(selectedEvent.details.requestBody, null, 2)}
                         </pre>
                       ) : (
-                        <div style={{ opacity: 0.6, fontSize: 13 }}>No payload captured.</div>
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No request body captured.</div>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  id: 'response',
+                  label: 'Response',
+                  content: (
+                    <div style={{ paddingTop: 16 }}>
+                      {selectedEvent.details?.responseBody ? (
+                        <pre
+                          style={{
+                            background: 'rgba(0,0,0,0.2)',
+                            padding: 12,
+                            borderRadius: 8,
+                            overflow: 'auto',
+                            fontSize: 12,
+                            fontFamily: 'JetBrains Mono, monospace',
+                            maxHeight: 300,
+                          }}
+                        >
+                          {JSON.stringify(selectedEvent.details.responseBody, null, 2)}
+                        </pre>
+                      ) : (
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No response body captured.</div>
                       )}
                     </div>
                   ),
                 },
                 {
                   id: 'raw',
-                  label: 'Raw Error',
+                  label: 'Full Event',
                   content: (
                     <div style={{ paddingTop: 16 }}>
-                      {selectedError.rawError ? (
-                        <pre
-                          style={{
-                            background: 'rgba(0,0,0,0.2)',
-                            padding: 12,
-                            borderRadius: 8,
-                            overflow: 'auto',
-                            fontSize: 12,
-                            fontFamily: 'JetBrains Mono, monospace',
-                            maxHeight: 300,
-                          }}
-                        >
-                          {JSON.stringify(selectedError.rawError, null, 2)}
-                        </pre>
-                      ) : (
-                        <div style={{ opacity: 0.6, fontSize: 13 }}>No raw error details.</div>
-                      )}
+                      <pre
+                        style={{
+                          background: 'rgba(0,0,0,0.2)',
+                          padding: 12,
+                          borderRadius: 8,
+                          overflow: 'auto',
+                          fontSize: 12,
+                          fontFamily: 'JetBrains Mono, monospace',
+                          maxHeight: 300,
+                        }}
+                      >
+                        {JSON.stringify(selectedEvent, null, 2)}
+                      </pre>
                     </div>
                   ),
                 },
@@ -618,26 +582,6 @@ export function ErrorLog() {
             />
           </div>
         )}
-      </Modal>
-
-      {/* Clear Confirmation Modal */}
-      <Modal
-        open={showClearConfirm}
-        onClose={() => setShowClearConfirm(false)}
-        title="Clear All Errors?"
-      >
-        <div style={{ padding: 16 }}>
-          <p style={{ marginBottom: 16 }}>
-            This will permanently delete all {errors.length} logged errors. This action cannot be
-            undone.
-          </p>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setShowClearConfirm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleClearAll}>Clear All</Button>
-          </div>
-        </div>
       </Modal>
     </Page>
   );
