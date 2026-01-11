@@ -66,6 +66,8 @@ export interface ShellConfig {
 export interface ShellUser {
   id?: string;
   email?: string;
+  /** Optional display name (e.g., from JWT `name` claim). HRM may override this at runtime. */
+  name?: string;
   avatar?: string;
   roles?: string[];
 }

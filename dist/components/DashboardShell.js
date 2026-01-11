@@ -59,6 +59,27 @@ function resolveTheme(preference) {
     }
     return preference;
 }
+function toInitials(input) {
+    const s = String(input || '').trim();
+    if (!s)
+        return '?';
+    // Split on spaces and common separators, keep first 2 initials.
+    const parts = s
+        .replace(/[._-]/g, ' ')
+        .split(' ')
+        .map((x) => x.trim())
+        .filter(Boolean);
+    const initials = parts.map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+    return initials || '?';
+}
+function employeeDisplayName(employee) {
+    const preferred = String(employee?.preferredName || employee?.preferred_name || '').trim();
+    if (preferred)
+        return preferred;
+    const first = String(employee?.firstName || employee?.first_name || '').trim();
+    const last = String(employee?.lastName || employee?.last_name || '').trim();
+    return [first, last].filter(Boolean).join(' ').trim();
+}
 function applyThemeToDocument(theme) {
     if (typeof document === 'undefined')
         return;
@@ -539,6 +560,13 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     });
     const [profileLoaded, setProfileLoaded] = useState(false);
     const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+    const [hrmEnabled, setHrmEnabled] = useState(() => Boolean(hitConfig?.featurePacks?.hrm));
+    const [hrmEmployee, setHrmEmployee] = useState(null);
+    const [hrmForm, setHrmForm] = useState({
+        firstName: '',
+        lastName: '',
+        preferredName: '',
+    });
     const [imageToCrop, setImageToCrop] = useState(null);
     const [cropModalOpen, setCropModalOpen] = useState(false);
     const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -595,11 +623,71 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             avatar: user.profile_picture_url || user.avatar || undefined,
         } : null;
         setCurrentUser(mappedUser);
-        // Note: name is no longer stored - email is used as the identifier
+        // Identity: email is the stable identifier; display name may be enriched via HRM (employees) when installed.
         setProfileLoaded(false);
         setProfileMetadata({});
         setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
     }, [user]);
+    // HRM pack can enrich identity (employee display name). Keep it optional and fail-soft.
+    useEffect(() => {
+        const enabled = Boolean(hitConfig?.featurePacks?.hrm);
+        setHrmEnabled(enabled);
+    }, [hitConfig]);
+    useEffect(() => {
+        if (!hrmEnabled)
+            return;
+        if (!currentUser?.email)
+            return;
+        let cancelled = false;
+        const fetchEmployee = async () => {
+            try {
+                const token = getStoredToken();
+                if (!token)
+                    return;
+                const res = await fetch('/api/hrm/employees/me', {
+                    headers: { Authorization: `Bearer ${token}` },
+                    credentials: 'include',
+                });
+                if (cancelled)
+                    return;
+                if (res.status === 404) {
+                    setHrmEnabled(false);
+                    return;
+                }
+                if (!res.ok)
+                    return;
+                const json = await res.json().catch(() => ({}));
+                const employee = json?.employee || null;
+                setHrmEmployee(employee);
+                setHrmForm({
+                    firstName: String(employee?.firstName || employee?.first_name || '').trim(),
+                    lastName: String(employee?.lastName || employee?.last_name || '').trim(),
+                    preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
+                });
+            }
+            catch {
+                // Ignore (optional feature)
+            }
+        };
+        fetchEmployee();
+        return () => {
+            cancelled = true;
+        };
+    }, [hrmEnabled, currentUser?.email]);
+    const userDisplayName = React.useMemo(() => {
+        const fromHrm = hrmEmployee ? employeeDisplayName(hrmEmployee) : '';
+        if (fromHrm)
+            return fromHrm;
+        const pfFirst = String(profileFields?.first_name || '').trim();
+        const pfLast = String(profileFields?.last_name || '').trim();
+        const fromProfileFields = [pfFirst, pfLast].filter(Boolean).join(' ').trim();
+        if (fromProfileFields)
+            return fromProfileFields;
+        const fromJwt = String(currentUser?.name || '').trim();
+        if (fromJwt)
+            return fromJwt;
+        return String(currentUser?.email || 'User');
+    }, [hrmEmployee, profileFields, currentUser?.name, currentUser?.email]);
     // Fetch profile picture on initial load if missing
     useEffect(() => {
         if (!currentUser?.email || currentUser?.avatar) {
@@ -1199,6 +1287,31 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 console.debug('Profile fields not available:', fieldsError);
             }
             setProfileLoaded(true);
+            // If HRM is enabled, also load employee profile for editing in the modal.
+            if (hrmEnabled) {
+                try {
+                    const eRes = await fetch('/api/hrm/employees/me', {
+                        headers: { Authorization: `Bearer ${token}` },
+                        credentials: 'include',
+                    });
+                    if (eRes.status === 404) {
+                        setHrmEnabled(false);
+                    }
+                    else if (eRes.ok) {
+                        const eJson = await eRes.json().catch(() => ({}));
+                        const employee = eJson?.employee || null;
+                        setHrmEmployee(employee);
+                        setHrmForm({
+                            firstName: String(employee?.firstName || employee?.first_name || '').trim(),
+                            lastName: String(employee?.lastName || employee?.last_name || '').trim(),
+                            preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
+                        });
+                    }
+                }
+                catch {
+                    // optional
+                }
+            }
         }
         catch (error) {
             setProfileStatus((prev) => ({
@@ -1207,7 +1320,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 success: null,
             }));
         }
-    }, [currentUser?.email]);
+    }, [currentUser?.email, hrmEnabled]);
     const handleProfileSave = useCallback(async () => {
         if (!currentUser?.email) {
             setProfileStatus({ saving: false, error: 'No user loaded.', success: null });
@@ -1222,6 +1335,40 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             const token = getStoredToken();
             if (!token) {
                 throw new Error('You must be signed in to update your profile.');
+            }
+            // HRM employee profile (optional). Save first so displayName updates immediately.
+            if (hrmEnabled) {
+                const firstName = String(hrmForm.firstName || '').trim();
+                const lastName = String(hrmForm.lastName || '').trim();
+                const preferredName = String(hrmForm.preferredName || '').trim();
+                // Only attempt save if the user filled anything in (avoid forcing HRM in existing installs).
+                if (firstName || lastName || preferredName) {
+                    const hrmRes = await fetch('/api/hrm/employees/me', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            firstName,
+                            lastName,
+                            preferredName: preferredName || null,
+                        }),
+                    });
+                    if (hrmRes.status === 404) {
+                        setHrmEnabled(false);
+                    }
+                    else if (!hrmRes.ok) {
+                        const hrmJson = await hrmRes.json().catch(() => ({}));
+                        throw new Error(hrmJson?.error || hrmJson?.detail || 'Failed to update employee profile');
+                    }
+                    else {
+                        const hrmJson = await hrmRes.json().catch(() => ({}));
+                        const employee = hrmJson?.employee || null;
+                        setHrmEmployee(employee);
+                    }
+                }
             }
             const payload = {};
             // Note: metadata.name is no longer used - email is used as the identifier
@@ -1285,6 +1432,10 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         profileMetadata,
         profileFields,
         profileFieldMetadata,
+        hrmEnabled,
+        hrmForm.firstName,
+        hrmForm.lastName,
+        hrmForm.preferredName,
     ]);
     const handlePictureUpload = useCallback(async (event) => {
         const file = event.target.files?.[0];
@@ -1753,7 +1904,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                             border: 'none',
                                                             borderRadius: radius.lg,
                                                             cursor: 'pointer',
-                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.email || 'User', style: styles({
+                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: userDisplayName || currentUser?.email || 'User', style: styles({
                                                                     width: '36px',
                                                                     height: '36px',
                                                                     borderRadius: radius.full,
@@ -1766,7 +1917,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                }), children: _jsx(User, { size: 18, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
+                                                                }), children: _jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 700, fontSize: '12px' }), children: toInitials(userDisplayName) }) })), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: userDisplayName || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
                                                                     position: 'absolute',
                                                                     right: 0,
                                                                     top: '100%',
@@ -1784,7 +1935,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                             display: 'flex',
                                                                             alignItems: 'center',
                                                                             gap: spacing.sm,
-                                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: currentUser?.email || 'User', style: styles({
+                                                                        }), children: [currentUser?.avatar ? (_jsx("img", { src: currentUser.avatar, alt: userDisplayName || currentUser?.email || 'User', style: styles({
                                                                                     width: '40px',
                                                                                     height: '40px',
                                                                                     borderRadius: radius.full,
@@ -1797,7 +1948,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     justifyContent: 'center',
-                                                                                }), children: _jsx(User, { size: 20, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
+                                                                                }), children: _jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '13px' }), children: toInitials(userDisplayName) }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: userDisplayName || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,
@@ -1932,7 +2083,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                 width: '36px',
                                                 height: '36px',
                                                 backgroundColor: colors.bg.muted,
-                                            }, "aria-label": "Close profile settings", children: _jsx(X, { size: 18 }) })] }), _jsxs("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.sm, paddingBottom: spacing.md, borderBottom: `1px solid ${colors.border.subtle}` }), children: [_jsx("label", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary }), children: "Profile Picture" }), _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.md }), children: [profilePictureUrl ? (_jsx("img", { src: profilePictureUrl, alt: currentUser?.email || 'User', style: styles({
+                                            }, "aria-label": "Close profile settings", children: _jsx(X, { size: 18 }) })] }), _jsxs("div", { style: styles({ padding: spacing.xl, display: 'flex', flexDirection: 'column', gap: spacing.md }), children: [_jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.sm, paddingBottom: spacing.md, borderBottom: `1px solid ${colors.border.subtle}` }), children: [_jsx("label", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary }), children: "Profile Picture" }), _jsxs("div", { style: styles({ display: 'flex', alignItems: 'center', gap: spacing.md }), children: [profilePictureUrl ? (_jsx("img", { src: profilePictureUrl, alt: userDisplayName || currentUser?.email || 'User', style: styles({
                                                                 width: '80px',
                                                                 height: '80px',
                                                                 borderRadius: radius.full,
@@ -1947,7 +2098,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
                                                                 border: `2px solid ${colors.border.default}`,
-                                                            }), children: _jsx(User, { size: 32, style: { color: colors.text.inverse } }) })), _jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, flex: 1 }), children: [_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.email || 'User' }), _jsxs("div", { style: styles({ display: 'flex', gap: spacing.sm }), children: [_jsxs("button", { onClick: triggerFileInput, disabled: uploadingPicture, style: styles({
+                                                            }), children: _jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '22px' }), children: toInitials(userDisplayName) }) })), _jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, flex: 1 }), children: [_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: userDisplayName || currentUser?.email || 'User' }), currentUser?.email && userDisplayName && userDisplayName !== currentUser.email ? (_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary }), children: currentUser.email })) : null, _jsxs("div", { style: styles({ display: 'flex', gap: spacing.sm }), children: [_jsxs("button", { onClick: triggerFileInput, disabled: uploadingPicture, style: styles({
                                                                                 display: 'flex',
                                                                                 alignItems: 'center',
                                                                                 gap: spacing.xs,
@@ -1971,7 +2122,28 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                                 fontSize: ts.bodySmall.fontSize,
                                                                                 cursor: uploadingPicture ? 'wait' : 'pointer',
                                                                                 opacity: uploadingPicture ? 0.6 : 1,
-                                                                            }), children: [_jsx(Trash2, { size: 14 }), "Delete"] }))] })] })] }), _jsx("input", { ref: fileInputRef, type: "file", accept: "image/*", onChange: handlePictureUpload, style: { display: 'none' } })] }), profileFieldMetadata
+                                                                            }), children: [_jsx(Trash2, { size: 14 }), "Delete"] }))] })] })] }), _jsx("input", { ref: fileInputRef, type: "file", accept: "image/*", onChange: handlePictureUpload, style: { display: 'none' } })] }), hrmEnabled && (_jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.sm, paddingBottom: spacing.md, borderBottom: `1px solid ${colors.border.subtle}` }), children: [_jsxs("div", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs }), children: [_jsx("div", { style: styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize }), children: "Employee name" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: "If HRM is installed, this becomes the canonical display name across the ERP UI." })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Preferred name (optional)" }), _jsx("input", { type: "text", value: hrmForm.preferredName, onChange: (e) => setHrmForm((prev) => ({ ...prev, preferredName: e.target.value })), placeholder: "Optional", style: styles({
+                                                                padding: `${spacing.sm} ${spacing.md}`,
+                                                                borderRadius: radius.md,
+                                                                border: `1px solid ${colors.border.default}`,
+                                                                backgroundColor: colors.bg.page,
+                                                                color: colors.text.primary,
+                                                                fontSize: ts.body.fontSize,
+                                                            }) })] }), _jsxs("div", { style: styles({ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.md }), children: [_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "First name *" }), _jsx("input", { type: "text", value: hrmForm.firstName, onChange: (e) => setHrmForm((prev) => ({ ...prev, firstName: e.target.value })), placeholder: "Required", style: styles({
+                                                                        padding: `${spacing.sm} ${spacing.md}`,
+                                                                        borderRadius: radius.md,
+                                                                        border: `1px solid ${colors.border.default}`,
+                                                                        backgroundColor: colors.bg.page,
+                                                                        color: colors.text.primary,
+                                                                        fontSize: ts.body.fontSize,
+                                                                    }) })] }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "Last name *" }), _jsx("input", { type: "text", value: hrmForm.lastName, onChange: (e) => setHrmForm((prev) => ({ ...prev, lastName: e.target.value })), placeholder: "Required", style: styles({
+                                                                        padding: `${spacing.sm} ${spacing.md}`,
+                                                                        borderRadius: radius.md,
+                                                                        border: `1px solid ${colors.border.default}`,
+                                                                        backgroundColor: colors.bg.page,
+                                                                        color: colors.text.primary,
+                                                                        fontSize: ts.body.fontSize,
+                                                                    }) })] })] })] })), profileFieldMetadata
                                             .sort((a, b) => a.display_order - b.display_order)
                                             .map((fieldMeta) => {
                                             const isAdmin = (currentUser?.roles || []).map((r) => String(r || '').toLowerCase()).includes('admin');

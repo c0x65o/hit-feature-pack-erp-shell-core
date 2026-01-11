@@ -91,6 +91,27 @@ function resolveTheme(preference: ThemePreference): 'light' | 'dark' {
   return preference;
 }
 
+function toInitials(input: string | null | undefined): string {
+  const s = String(input || '').trim();
+  if (!s) return '?';
+  // Split on spaces and common separators, keep first 2 initials.
+  const parts = s
+    .replace(/[._-]/g, ' ')
+    .split(' ')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const initials = parts.map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+  return initials || '?';
+}
+
+function employeeDisplayName(employee: any): string {
+  const preferred = String(employee?.preferredName || employee?.preferred_name || '').trim();
+  if (preferred) return preferred;
+  const first = String(employee?.firstName || employee?.first_name || '').trim();
+  const last = String(employee?.lastName || employee?.last_name || '').trim();
+  return [first, last].filter(Boolean).join(' ').trim();
+}
+
 function applyThemeToDocument(theme: 'light' | 'dark') {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
@@ -775,6 +796,13 @@ function ShellContent({
   });
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
+  const [hrmEnabled, setHrmEnabled] = useState<boolean>(() => Boolean((hitConfig as any)?.featurePacks?.hrm));
+  const [hrmEmployee, setHrmEmployee] = useState<any | null>(null);
+  const [hrmForm, setHrmForm] = useState<{ firstName: string; lastName: string; preferredName: string }>({
+    firstName: '',
+    lastName: '',
+    preferredName: '',
+  });
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -837,11 +865,65 @@ function ShellContent({
       avatar: (user as any).profile_picture_url || user.avatar || undefined,
     } : null;
     setCurrentUser(mappedUser);
-    // Note: name is no longer stored - email is used as the identifier
+    // Identity: email is the stable identifier; display name may be enriched via HRM (employees) when installed.
     setProfileLoaded(false);
     setProfileMetadata({});
     setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
   }, [user]);
+
+  // HRM pack can enrich identity (employee display name). Keep it optional and fail-soft.
+  useEffect(() => {
+    const enabled = Boolean((hitConfig as any)?.featurePacks?.hrm);
+    setHrmEnabled(enabled);
+  }, [hitConfig]);
+
+  useEffect(() => {
+    if (!hrmEnabled) return;
+    if (!currentUser?.email) return;
+    let cancelled = false;
+    const fetchEmployee = async () => {
+      try {
+        const token = getStoredToken();
+        if (!token) return;
+        const res = await fetch('/api/hrm/employees/me', {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+        });
+        if (cancelled) return;
+        if (res.status === 404) {
+          setHrmEnabled(false);
+          return;
+        }
+        if (!res.ok) return;
+        const json = await res.json().catch(() => ({}));
+        const employee = (json as any)?.employee || null;
+        setHrmEmployee(employee);
+        setHrmForm({
+          firstName: String(employee?.firstName || employee?.first_name || '').trim(),
+          lastName: String(employee?.lastName || employee?.last_name || '').trim(),
+          preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
+        });
+      } catch {
+        // Ignore (optional feature)
+      }
+    };
+    fetchEmployee();
+    return () => {
+      cancelled = true;
+    };
+  }, [hrmEnabled, currentUser?.email]);
+
+  const userDisplayName = React.useMemo(() => {
+    const fromHrm = hrmEmployee ? employeeDisplayName(hrmEmployee) : '';
+    if (fromHrm) return fromHrm;
+    const pfFirst = String((profileFields as any)?.first_name || '').trim();
+    const pfLast = String((profileFields as any)?.last_name || '').trim();
+    const fromProfileFields = [pfFirst, pfLast].filter(Boolean).join(' ').trim();
+    if (fromProfileFields) return fromProfileFields;
+    const fromJwt = String((currentUser as any)?.name || '').trim();
+    if (fromJwt) return fromJwt;
+    return String(currentUser?.email || 'User');
+  }, [hrmEmployee, profileFields, currentUser?.name, currentUser?.email]);
 
   // Fetch profile picture on initial load if missing
   useEffect(() => {
@@ -1472,6 +1554,30 @@ function ShellContent({
       }
       
       setProfileLoaded(true);
+
+      // If HRM is enabled, also load employee profile for editing in the modal.
+      if (hrmEnabled) {
+        try {
+          const eRes = await fetch('/api/hrm/employees/me', {
+            headers: { Authorization: `Bearer ${token}` },
+            credentials: 'include',
+          });
+          if (eRes.status === 404) {
+            setHrmEnabled(false);
+          } else if (eRes.ok) {
+            const eJson = await eRes.json().catch(() => ({}));
+            const employee = (eJson as any)?.employee || null;
+            setHrmEmployee(employee);
+            setHrmForm({
+              firstName: String(employee?.firstName || employee?.first_name || '').trim(),
+              lastName: String(employee?.lastName || employee?.last_name || '').trim(),
+              preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
+            });
+          }
+        } catch {
+          // optional
+        }
+      }
     } catch (error) {
       setProfileStatus((prev) => ({
         ...prev,
@@ -1479,7 +1585,7 @@ function ShellContent({
         success: null,
       }));
     }
-  }, [currentUser?.email]);
+  }, [currentUser?.email, hrmEnabled]);
 
   const handleProfileSave = useCallback(async () => {
     if (!currentUser?.email) {
@@ -1496,6 +1602,40 @@ function ShellContent({
       const token = getStoredToken();
       if (!token) {
         throw new Error('You must be signed in to update your profile.');
+      }
+
+      // HRM employee profile (optional). Save first so displayName updates immediately.
+      if (hrmEnabled) {
+        const firstName = String(hrmForm.firstName || '').trim();
+        const lastName = String(hrmForm.lastName || '').trim();
+        const preferredName = String(hrmForm.preferredName || '').trim();
+
+        // Only attempt save if the user filled anything in (avoid forcing HRM in existing installs).
+        if (firstName || lastName || preferredName) {
+          const hrmRes = await fetch('/api/hrm/employees/me', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              firstName,
+              lastName,
+              preferredName: preferredName || null,
+            }),
+          });
+          if (hrmRes.status === 404) {
+            setHrmEnabled(false);
+          } else if (!hrmRes.ok) {
+            const hrmJson = await hrmRes.json().catch(() => ({}));
+            throw new Error(hrmJson?.error || hrmJson?.detail || 'Failed to update employee profile');
+          } else {
+            const hrmJson = await hrmRes.json().catch(() => ({}));
+            const employee = (hrmJson as any)?.employee || null;
+            setHrmEmployee(employee);
+          }
+        }
       }
 
       const payload: Record<string, any> = {};
@@ -1564,6 +1704,10 @@ function ShellContent({
     profileMetadata,
     profileFields,
     profileFieldMetadata,
+    hrmEnabled,
+    hrmForm.firstName,
+    hrmForm.lastName,
+    hrmForm.preferredName,
   ]);
 
   const handlePictureUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2324,7 +2468,7 @@ function ShellContent({
                     {currentUser?.avatar ? (
                       <img
                         src={currentUser.avatar}
-                        alt={currentUser?.email || 'User'}
+                        alt={userDisplayName || currentUser?.email || 'User'}
                         style={styles({
                           width: '36px',
                           height: '36px',
@@ -2342,12 +2486,14 @@ function ShellContent({
                         alignItems: 'center',
                         justifyContent: 'center',
                       })}>
-                        <User size={18} style={{ color: colors.text.inverse }} />
+                        <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: '12px' })}>
+                          {toInitials(userDisplayName)}
+                        </span>
                       </div>
                     )}
                     <div style={styles({ textAlign: 'left' })}>
                       <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
-                        {currentUser?.email || 'User'}
+                        {userDisplayName || currentUser?.email || 'User'}
                       </div>
                       <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
                         {currentUser?.roles?.[0] || 'Member'}
@@ -2381,7 +2527,7 @@ function ShellContent({
                           {currentUser?.avatar ? (
                             <img
                               src={currentUser.avatar}
-                              alt={currentUser?.email || 'User'}
+                              alt={userDisplayName || currentUser?.email || 'User'}
                               style={styles({
                                 width: '40px',
                                 height: '40px',
@@ -2399,12 +2545,14 @@ function ShellContent({
                               alignItems: 'center',
                               justifyContent: 'center',
                             })}>
-                              <User size={20} style={{ color: colors.text.inverse }} />
+                              <span style={styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '13px' })}>
+                                {toInitials(userDisplayName)}
+                              </span>
                             </div>
                           )}
                           <div style={styles({ flex: 1, minWidth: 0 })}>
                             <div style={styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary })}>
-                              {currentUser?.email || 'User'}
+                              {userDisplayName || currentUser?.email || 'User'}
                             </div>
                             <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
                               {currentUser?.roles?.[0] || 'Member'}
@@ -2698,7 +2846,7 @@ function ShellContent({
                     {profilePictureUrl ? (
                       <img
                         src={profilePictureUrl}
-                        alt={currentUser?.email || 'User'}
+                        alt={userDisplayName || currentUser?.email || 'User'}
                         style={styles({
                           width: '80px',
                           height: '80px',
@@ -2718,13 +2866,20 @@ function ShellContent({
                         justifyContent: 'center',
                         border: `2px solid ${colors.border.default}`,
                       })}>
-                        <User size={32} style={{ color: colors.text.inverse }} />
+                        <span style={styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '22px' })}>
+                          {toInitials(userDisplayName)}
+                        </span>
                       </div>
                     )}
                     <div style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, flex: 1 })}>
                       <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                        {currentUser?.email || 'User'}
+                        {userDisplayName || currentUser?.email || 'User'}
                       </div>
+                      {currentUser?.email && userDisplayName && userDisplayName !== currentUser.email ? (
+                        <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.secondary })}>
+                          {currentUser.email}
+                        </div>
+                      ) : null}
                       <div style={styles({ display: 'flex', gap: spacing.sm })}>
                         <button
                           onClick={triggerFileInput}
@@ -2779,6 +2934,73 @@ function ShellContent({
                     style={{ display: 'none' }}
                   />
                 </div>
+
+                {/* HRM Employee identity (optional) */}
+                {hrmEnabled && (
+                  <div style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.sm, paddingBottom: spacing.md, borderBottom: `1px solid ${colors.border.subtle}` })}>
+                    <div style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs })}>
+                      <div style={styles({ fontWeight: ts.label.fontWeight, fontSize: ts.body.fontSize })}>Employee name</div>
+                      <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                        If HRM is installed, this becomes the canonical display name across the ERP UI.
+                      </div>
+                    </div>
+
+                    <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
+                      <span style={styles({ color: colors.text.secondary })}>Preferred name (optional)</span>
+                      <input
+                        type="text"
+                        value={hrmForm.preferredName}
+                        onChange={(e) => setHrmForm((prev) => ({ ...prev, preferredName: e.target.value }))}
+                        placeholder="Optional"
+                        style={styles({
+                          padding: `${spacing.sm} ${spacing.md}`,
+                          borderRadius: radius.md,
+                          border: `1px solid ${colors.border.default}`,
+                          backgroundColor: colors.bg.page,
+                          color: colors.text.primary,
+                          fontSize: ts.body.fontSize,
+                        })}
+                      />
+                    </label>
+
+                    <div style={styles({ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.md })}>
+                      <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
+                        <span style={styles({ color: colors.text.secondary })}>First name *</span>
+                        <input
+                          type="text"
+                          value={hrmForm.firstName}
+                          onChange={(e) => setHrmForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                          placeholder="Required"
+                          style={styles({
+                            padding: `${spacing.sm} ${spacing.md}`,
+                            borderRadius: radius.md,
+                            border: `1px solid ${colors.border.default}`,
+                            backgroundColor: colors.bg.page,
+                            color: colors.text.primary,
+                            fontSize: ts.body.fontSize,
+                          })}
+                        />
+                      </label>
+                      <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>
+                        <span style={styles({ color: colors.text.secondary })}>Last name *</span>
+                        <input
+                          type="text"
+                          value={hrmForm.lastName}
+                          onChange={(e) => setHrmForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                          placeholder="Required"
+                          style={styles({
+                            padding: `${spacing.sm} ${spacing.md}`,
+                            borderRadius: radius.md,
+                            border: `1px solid ${colors.border.default}`,
+                            backgroundColor: colors.bg.page,
+                            color: colors.text.primary,
+                            fontSize: ts.body.fontSize,
+                          })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
 
                 {/* Profile Fields - Integrated (including email) */}
                 {profileFieldMetadata
