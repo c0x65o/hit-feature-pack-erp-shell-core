@@ -498,6 +498,7 @@ export function ErrorLog() {
                       <DetailRow label="Status" value={getStatusLabel(selectedEvent.details?.responseStatus)} />
                       <DetailRow label="Method" value={selectedEvent.method || '—'} />
                       <DetailRow label="Path" value={selectedEvent.path || '—'} mono />
+                      <DetailRow label="Correlation ID" value={selectedEvent.correlationId || '—'} mono />
                       <DetailRow label="User" value={selectedEvent.actorName || selectedEvent.actorId || 'Anonymous'} />
                       <DetailRow label="Duration" value={selectedEvent.details?.durationMs ? `${selectedEvent.details.durationMs}ms` : '—'} />
                       <DetailRow label="Summary" value={selectedEvent.summary} />

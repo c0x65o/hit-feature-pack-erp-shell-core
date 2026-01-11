@@ -3,6 +3,7 @@
 # Also includes the table views system for user-customizable data table views
 
 name: erp-shell-core
+title: System Core
 description: ERP shell core with sidebar, topbar, notifications, theme support, and table views system
 
 # ─────────────────────────────────────────────────────────────────────────────
