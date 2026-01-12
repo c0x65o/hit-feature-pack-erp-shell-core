@@ -146,12 +146,18 @@ const groupConfig = {
 };
 function groupNavItems(items) {
     const groups = {};
+    const seenIds = {}; // Track seen IDs per group
     items.forEach((item) => {
         const group = item.group || 'main';
         if (!groups[group]) {
             groups[group] = [];
+            seenIds[group] = new Set();
         }
-        groups[group].push(item);
+        // Deduplicate by id within each group
+        if (!seenIds[group].has(item.id)) {
+            seenIds[group].add(item.id);
+            groups[group].push(item);
+        }
     });
     Object.keys(groups).forEach((group) => {
         groups[group].sort((a, b) => (a.weight ?? 500) - (b.weight ?? 500));

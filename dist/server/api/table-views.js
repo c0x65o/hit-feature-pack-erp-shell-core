@@ -8,6 +8,9 @@ import { resolveUserPrincipals } from '@hit/feature-pack-auth-core/server/lib/ac
 // Required for Next.js App Router
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+function isAdmin(roles) {
+    return Array.isArray(roles) && roles.some((r) => String(r || '').toLowerCase() === 'admin');
+}
 /**
  * GET /api/table-views?tableId=projects
  * List all views for a table:
@@ -149,6 +152,10 @@ export async function POST(request) {
         const { tableId, name, description, filters, columnVisibility, sorting, groupBy, isDefault, isSystem, metadata } = body;
         if (!tableId || !name) {
             return NextResponse.json({ error: 'tableId and name are required' }, { status: 400 });
+        }
+        // Only admins can create system views (global/shared by definition).
+        if (isSystem && !isAdmin(user.roles)) {
+            return NextResponse.json({ error: 'Only admins can create system views' }, { status: 403 });
         }
         // Create view
         // isSystem views are visible to all users; they use 'system' as userId
