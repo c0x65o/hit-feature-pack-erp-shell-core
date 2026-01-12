@@ -19,6 +19,7 @@ export function useShell() {
 const THEME_STORAGE_KEY = 'erp-shell-core-theme';
 const THEME_COOKIE_KEY = 'erp-shell-core-theme';
 const TOKEN_COOKIE_KEY = 'hit_token';
+const ORIGINAL_TOKEN_STORAGE_KEY = 'hit_token_original';
 const MENU_OPEN_KEY = 'erp-shell-core-menu-open';
 const EXPANDED_NODES_KEY = 'erp-shell-core-expanded-nodes';
 const NAV_SCROLL_KEY = 'erp-shell-core-nav-scroll';
@@ -36,6 +37,41 @@ function getStoredToken() {
         return localStorage.getItem(TOKEN_COOKIE_KEY);
     }
     return null;
+}
+function base64UrlToBase64(s) {
+    let out = (s || '').replace(/-/g, '+').replace(/_/g, '/');
+    const pad = out.length % 4;
+    if (pad)
+        out += '='.repeat(4 - pad);
+    return out;
+}
+function decodeJwtPayload(token) {
+    try {
+        const parts = String(token || '').split('.');
+        if (parts.length !== 3)
+            return null;
+        const json = atob(base64UrlToBase64(parts[1] || ''));
+        const payload = JSON.parse(json);
+        if (!payload || typeof payload !== 'object')
+            return null;
+        return payload;
+    }
+    catch {
+        return null;
+    }
+}
+function setAuthToken(token) {
+    if (typeof window === 'undefined')
+        return;
+    localStorage.setItem(TOKEN_COOKIE_KEY, token);
+    // Best-effort cookie max-age from JWT exp (falls back to 1 hour).
+    let maxAge = 3600;
+    const payload = decodeJwtPayload(token);
+    const exp = payload?.exp;
+    if (typeof exp === 'number') {
+        maxAge = Math.max(0, exp - Math.floor(Date.now() / 1000));
+    }
+    document.cookie = `${TOKEN_COOKIE_KEY}=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 function getSavedThemePreference() {
     if (typeof localStorage !== 'undefined') {
@@ -525,6 +561,9 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         return win.__HIT_CONFIG || null;
     });
     const [currentUser, setCurrentUser] = useState(user);
+    const [authToken, setAuthTokenState] = useState(null);
+    const [endingImpersonation, setEndingImpersonation] = useState(false);
+    const [impersonationError, setImpersonationError] = useState(null);
     // Initialize theme from DOM (set by blocking script) to prevent flash
     const [themePreference, setThemePreference] = useState(() => {
         // Read from localStorage/cookie on client
@@ -571,6 +610,59 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const [cropModalOpen, setCropModalOpen] = useState(false);
     const [uploadingPicture, setUploadingPicture] = useState(false);
     const fileInputRef = React.useRef(null);
+    // Keep a lightweight view of the auth token for impersonation UX (token swaps happen without remounting the shell).
+    useEffect(() => {
+        const refresh = () => setAuthTokenState(getStoredToken());
+        refresh();
+        const t = window.setInterval(refresh, 1000);
+        return () => window.clearInterval(t);
+    }, []);
+    const impersonation = React.useMemo(() => {
+        const payload = authToken ? decodeJwtPayload(authToken) : null;
+        const fromClaims = Boolean(payload?.impersonated);
+        const byRaw = payload?.impersonated_by;
+        const by = typeof byRaw === 'string' && byRaw.trim() ? byRaw.trim() : undefined;
+        return {
+            active: fromClaims,
+            by: fromClaims ? by : undefined,
+        };
+    }, [authToken]);
+    const endImpersonation = useCallback(async () => {
+        if (endingImpersonation)
+            return;
+        const token = getStoredToken();
+        if (!token)
+            return;
+        setImpersonationError(null);
+        setEndingImpersonation(true);
+        try {
+            const res = await fetch('/api/proxy/auth/impersonate/end', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                credentials: 'include',
+            });
+            if (!res.ok) {
+                const txt = await res.text().catch(() => '');
+                throw new Error(txt || 'Failed to end impersonation');
+            }
+            const json = await res.json();
+            const nextToken = json?.token;
+            if (!nextToken) {
+                throw new Error('Impersonation end did not return a token');
+            }
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem(ORIGINAL_TOKEN_STORAGE_KEY);
+            }
+            setAuthToken(nextToken);
+            window.location.reload();
+        }
+        catch (err) {
+            setImpersonationError(err instanceof Error ? err.message : 'Failed to end impersonation');
+        }
+        finally {
+            setEndingImpersonation(false);
+        }
+    }, [endingImpersonation]);
     const setMenuOpen = useCallback((open) => {
         setMenuOpenState(open);
         if (typeof window !== 'undefined') {
@@ -1909,6 +2001,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     height: '36px',
                                                                     borderRadius: radius.full,
                                                                     objectFit: 'cover',
+                                                                    ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                                                                 }) })) : (_jsx("div", { style: styles({
                                                                     width: '36px',
                                                                     height: '36px',
@@ -1917,6 +2010,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
+                                                                    ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                                                                 }), children: _jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 700, fontSize: '12px' }), children: toInitials(userDisplayName) }) })), _jsxs("div", { style: styles({ textAlign: 'left' }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: userDisplayName || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), showProfileMenu && (_jsxs(_Fragment, { children: [_jsx("div", { onClick: () => setShowProfileMenu(false), style: styles({ position: 'fixed', inset: 0, zIndex: 40 }) }), _jsxs("div", { style: styles({
                                                                     position: 'absolute',
                                                                     right: 0,
@@ -1940,6 +2034,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                                     height: '40px',
                                                                                     borderRadius: radius.full,
                                                                                     objectFit: 'cover',
+                                                                                    ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                                                                                 }) })) : (_jsx("div", { style: styles({
                                                                                     width: '40px',
                                                                                     height: '40px',
@@ -1948,7 +2043,24 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     justifyContent: 'center',
-                                                                                }), children: _jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '13px' }), children: toInitials(userDisplayName) }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: userDisplayName || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
+                                                                                    ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
+                                                                                }), children: _jsx("span", { style: styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '13px' }), children: toInitials(userDisplayName) }) })), _jsxs("div", { style: styles({ flex: 1, minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: ts.body.fontSize, fontWeight: ts.label.fontWeight, color: colors.text.primary }), children: userDisplayName || currentUser?.email || 'User' }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: currentUser?.roles?.[0] || 'Member' })] })] }), impersonation.active && (_jsxs("div", { style: styles({
+                                                                            padding: `${spacing.sm} ${spacing.lg}`,
+                                                                            borderBottom: `1px solid ${colors.border.subtle}`,
+                                                                            backgroundColor: `${colors.warning.default}12`,
+                                                                            display: 'flex',
+                                                                            flexDirection: 'column',
+                                                                            gap: spacing.xs,
+                                                                        }), children: [_jsx("div", { style: styles({ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', color: colors.warning.default }), children: "ASSUMING USER" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.primary, wordBreak: 'break-word' }), children: currentUser?.email || 'Unknown user' }), impersonation.by ? (_jsxs("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: ["Admin: ", impersonation.by] })) : null, impersonationError ? (_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.error.default }), children: impersonationError })) : null, _jsx("div", { style: styles({ marginTop: spacing.xs, display: 'flex', justifyContent: 'flex-end' }), children: _jsx("button", { onClick: () => { setShowProfileMenu(false); endImpersonation(); }, disabled: endingImpersonation, style: styles({
+                                                                                        padding: `${spacing.xs} ${spacing.md}`,
+                                                                                        borderRadius: radius.md,
+                                                                                        border: `1px solid ${colors.warning.default}`,
+                                                                                        backgroundColor: colors.bg.surface,
+                                                                                        color: colors.text.primary,
+                                                                                        cursor: endingImpersonation ? 'not-allowed' : 'pointer',
+                                                                                        fontSize: ts.bodySmall.fontSize,
+                                                                                        fontWeight: 700,
+                                                                                    }), children: endingImpersonation ? 'Exiting…' : 'Exit assume' }) })] })), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,

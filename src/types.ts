@@ -70,6 +70,10 @@ export interface ShellUser {
   name?: string;
   avatar?: string;
   roles?: string[];
+  /** True when this token is impersonating another user (admin impersonation). */
+  impersonated?: boolean;
+  /** Email of the admin/support user performing the impersonation (when impersonated=true). */
+  impersonated_by?: string;
 }
 
 /**

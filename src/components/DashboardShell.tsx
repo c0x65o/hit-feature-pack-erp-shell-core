@@ -47,6 +47,7 @@ type ThemePreference = 'light' | 'dark' | 'system';
 const THEME_STORAGE_KEY = 'erp-shell-core-theme';
 const THEME_COOKIE_KEY = 'erp-shell-core-theme';
 const TOKEN_COOKIE_KEY = 'hit_token';
+const ORIGINAL_TOKEN_STORAGE_KEY = 'hit_token_original';
 
 const MENU_OPEN_KEY = 'erp-shell-core-menu-open';
 const EXPANDED_NODES_KEY = 'erp-shell-core-expanded-nodes';
@@ -65,6 +66,41 @@ function getStoredToken(): string | null {
     return localStorage.getItem(TOKEN_COOKIE_KEY);
   }
   return null;
+}
+
+function base64UrlToBase64(s: string): string {
+  let out = (s || '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = out.length % 4;
+  if (pad) out += '='.repeat(4 - pad);
+  return out;
+}
+
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    const json = atob(base64UrlToBase64(parts[1] || ''));
+    const payload = JSON.parse(json);
+    if (!payload || typeof payload !== 'object') return null;
+    return payload as Record<string, any>;
+  } catch {
+    return null;
+  }
+}
+
+function setAuthToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(TOKEN_COOKIE_KEY, token);
+
+  // Best-effort cookie max-age from JWT exp (falls back to 1 hour).
+  let maxAge = 3600;
+  const payload = decodeJwtPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp === 'number') {
+    maxAge = Math.max(0, exp - Math.floor(Date.now() / 1000));
+  }
+
+  document.cookie = `${TOKEN_COOKIE_KEY}=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
 function getSavedThemePreference(): ThemePreference | null {
@@ -755,6 +791,9 @@ function ShellContent({
     return win.__HIT_CONFIG || null;
   });
   const [currentUser, setCurrentUser] = useState<ShellUser | null>(user);
+  const [authToken, setAuthTokenState] = useState<string | null>(null);
+  const [endingImpersonation, setEndingImpersonation] = useState(false);
+  const [impersonationError, setImpersonationError] = useState<string | null>(null);
   // Initialize theme from DOM (set by blocking script) to prevent flash
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
     // Read from localStorage/cookie on client
@@ -807,6 +846,59 @@ function ShellContent({
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Keep a lightweight view of the auth token for impersonation UX (token swaps happen without remounting the shell).
+  useEffect(() => {
+    const refresh = () => setAuthTokenState(getStoredToken());
+    refresh();
+    const t = window.setInterval(refresh, 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const impersonation = React.useMemo(() => {
+    const payload = authToken ? decodeJwtPayload(authToken) : null;
+    const fromClaims = Boolean(payload?.impersonated);
+    const byRaw = payload?.impersonated_by;
+    const by = typeof byRaw === 'string' && byRaw.trim() ? byRaw.trim() : undefined;
+    return {
+      active: fromClaims,
+      by: fromClaims ? by : undefined,
+    };
+  }, [authToken]);
+
+  const endImpersonation = useCallback(async () => {
+    if (endingImpersonation) return;
+    const token = getStoredToken();
+    if (!token) return;
+
+    setImpersonationError(null);
+    setEndingImpersonation(true);
+    try {
+      const res = await fetch('/api/proxy/auth/impersonate/end', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt || 'Failed to end impersonation');
+      }
+      const json = await res.json();
+      const nextToken = (json as any)?.token;
+      if (!nextToken) {
+        throw new Error('Impersonation end did not return a token');
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(ORIGINAL_TOKEN_STORAGE_KEY);
+      }
+      setAuthToken(nextToken);
+      window.location.reload();
+    } catch (err) {
+      setImpersonationError(err instanceof Error ? err.message : 'Failed to end impersonation');
+    } finally {
+      setEndingImpersonation(false);
+    }
+  }, [endingImpersonation]);
 
   const setMenuOpen = useCallback((open: boolean) => {
     setMenuOpenState(open);
@@ -2474,6 +2566,7 @@ function ShellContent({
                           height: '36px',
                           borderRadius: radius.full,
                           objectFit: 'cover',
+                          ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                         })}
                       />
                     ) : (
@@ -2485,6 +2578,7 @@ function ShellContent({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                       })}>
                         <span style={styles({ color: colors.text.inverse, fontWeight: 700, fontSize: '12px' })}>
                           {toInitials(userDisplayName)}
@@ -2533,6 +2627,7 @@ function ShellContent({
                                 height: '40px',
                                 borderRadius: radius.full,
                                 objectFit: 'cover',
+                                ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                               })}
                             />
                           ) : (
@@ -2544,6 +2639,7 @@ function ShellContent({
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
+                              ...(impersonation.active ? { boxShadow: `0 0 0 2px ${colors.warning.default}` } : {}),
                             })}>
                               <span style={styles({ color: colors.text.inverse, fontWeight: 800, fontSize: '13px' })}>
                                 {toInitials(userDisplayName)}
@@ -2559,6 +2655,51 @@ function ShellContent({
                             </div>
                           </div>
                         </div>
+                        {impersonation.active && (
+                          <div style={styles({
+                            padding: `${spacing.sm} ${spacing.lg}`,
+                            borderBottom: `1px solid ${colors.border.subtle}`,
+                            backgroundColor: `${colors.warning.default}12`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: spacing.xs,
+                          })}>
+                            <div style={styles({ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', color: colors.warning.default })}>
+                              ASSUMING USER
+                            </div>
+                            <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.primary, wordBreak: 'break-word' })}>
+                              {currentUser?.email || 'Unknown user'}
+                            </div>
+                            {impersonation.by ? (
+                              <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                                Admin: {impersonation.by}
+                              </div>
+                            ) : null}
+                            {impersonationError ? (
+                              <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.error.default })}>
+                                {impersonationError}
+                              </div>
+                            ) : null}
+                            <div style={styles({ marginTop: spacing.xs, display: 'flex', justifyContent: 'flex-end' })}>
+                              <button
+                                onClick={() => { setShowProfileMenu(false); endImpersonation(); }}
+                                disabled={endingImpersonation}
+                                style={styles({
+                                  padding: `${spacing.xs} ${spacing.md}`,
+                                  borderRadius: radius.md,
+                                  border: `1px solid ${colors.warning.default}`,
+                                  backgroundColor: colors.bg.surface,
+                                  color: colors.text.primary,
+                                  cursor: endingImpersonation ? 'not-allowed' : 'pointer',
+                                  fontSize: ts.bodySmall.fontSize,
+                                  fontWeight: 700,
+                                })}
+                              >
+                                {endingImpersonation ? 'Exiting…' : 'Exit assume'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <div style={styles({ padding: spacing.sm })}>
                           <button
                             onClick={openProfileModal}
