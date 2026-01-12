@@ -48,6 +48,7 @@ const THEME_STORAGE_KEY = 'erp-shell-core-theme';
 const THEME_COOKIE_KEY = 'erp-shell-core-theme';
 const TOKEN_COOKIE_KEY = 'hit_token';
 const ORIGINAL_TOKEN_STORAGE_KEY = 'hit_token_original';
+const LAST_IMPERSONATED_EMAIL_KEY = 'hit_last_impersonated_email';
 
 const MENU_OPEN_KEY = 'erp-shell-core-menu-open';
 const EXPANDED_NODES_KEY = 'erp-shell-core-expanded-nodes';
@@ -794,6 +795,8 @@ function ShellContent({
   const [authToken, setAuthTokenState] = useState<string | null>(null);
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [impersonationError, setImpersonationError] = useState<string | null>(null);
+  const [startingImpersonation, setStartingImpersonation] = useState(false);
+  const [lastImpersonatedEmail, setLastImpersonatedEmail] = useState<string | null>(null);
   // Initialize theme from DOM (set by blocking script) to prevent flash
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
     // Read from localStorage/cookie on client
@@ -849,7 +852,13 @@ function ShellContent({
 
   // Keep a lightweight view of the auth token for impersonation UX (token swaps happen without remounting the shell).
   useEffect(() => {
-    const refresh = () => setAuthTokenState(getStoredToken());
+    const refresh = () => {
+      setAuthTokenState(getStoredToken());
+      if (typeof window !== 'undefined') {
+        const v = window.localStorage.getItem(LAST_IMPERSONATED_EMAIL_KEY);
+        setLastImpersonatedEmail(v && v.trim() ? v.trim() : null);
+      }
+    };
     refresh();
     const t = window.setInterval(refresh, 1000);
     return () => window.clearInterval(t);
@@ -866,7 +875,7 @@ function ShellContent({
     };
   }, [authToken]);
 
-  const endImpersonation = useCallback(async () => {
+  const endImpersonation = useCallback(async ({ clearLast }: { clearLast: boolean }) => {
     if (endingImpersonation) return;
     const token = getStoredToken();
     if (!token) return;
@@ -890,6 +899,7 @@ function ShellContent({
       }
       if (typeof window !== 'undefined') {
         localStorage.removeItem(ORIGINAL_TOKEN_STORAGE_KEY);
+        if (clearLast) localStorage.removeItem(LAST_IMPERSONATED_EMAIL_KEY);
       }
       setAuthToken(nextToken);
       window.location.reload();
@@ -899,6 +909,43 @@ function ShellContent({
       setEndingImpersonation(false);
     }
   }, [endingImpersonation]);
+
+  const resumeLastImpersonation = useCallback(async () => {
+    if (startingImpersonation) return;
+    const token = getStoredToken();
+    if (!token) return;
+    if (typeof window === 'undefined') return;
+
+    const lastEmail = localStorage.getItem(LAST_IMPERSONATED_EMAIL_KEY) || '';
+    if (!lastEmail.trim()) return;
+
+    setImpersonationError(null);
+    setStartingImpersonation(true);
+    try {
+      // Stash admin token so we can toggle back.
+      localStorage.setItem(ORIGINAL_TOKEN_STORAGE_KEY, token);
+
+      const res = await fetch('/api/proxy/auth/impersonate/start', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ user_email: lastEmail }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt || 'Failed to start impersonation');
+      }
+      const json = await res.json();
+      const nextToken = (json as any)?.token;
+      if (!nextToken) throw new Error('Impersonation did not return a token');
+      setAuthToken(nextToken);
+      window.location.reload();
+    } catch (err) {
+      setImpersonationError(err instanceof Error ? err.message : 'Failed to start impersonation');
+    } finally {
+      setStartingImpersonation(false);
+    }
+  }, [startingImpersonation]);
 
   const setMenuOpen = useCallback((open: boolean) => {
     setMenuOpenState(open);
@@ -2680,9 +2727,29 @@ function ShellContent({
                                 {impersonationError}
                               </div>
                             ) : null}
-                            <div style={styles({ marginTop: spacing.xs, display: 'flex', justifyContent: 'flex-end' })}>
+                            <div style={styles({ marginTop: spacing.xs, display: 'flex', justifyContent: 'flex-end', gap: spacing.sm })}>
                               <button
-                                onClick={() => { setShowProfileMenu(false); endImpersonation(); }}
+                                onClick={() => { setShowProfileMenu(false); endImpersonation({ clearLast: false }); }}
+                                disabled={endingImpersonation}
+                                title="Switch back (keeps this user ready to re-assume)"
+                                style={styles({
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: radius.full,
+                                  border: `1px solid ${colors.warning.default}`,
+                                  backgroundColor: colors.bg.surface,
+                                  color: colors.text.primary,
+                                  cursor: endingImpersonation ? 'not-allowed' : 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                })}
+                              >
+                                <RotateCw size={16} />
+                              </button>
+                              <button
+                                onClick={() => { setShowProfileMenu(false); endImpersonation({ clearLast: true }); }}
                                 disabled={endingImpersonation}
                                 style={styles({
                                   padding: `${spacing.xs} ${spacing.md}`,
@@ -2698,6 +2765,51 @@ function ShellContent({
                                 {endingImpersonation ? 'Exiting…' : 'Exit assume'}
                               </button>
                             </div>
+                          </div>
+                        )}
+                        {!impersonation.active && lastImpersonatedEmail && (currentUser?.roles?.includes('admin') || currentUser?.roles?.includes('owner')) && (
+                          <div style={styles({
+                            padding: `${spacing.sm} ${spacing.lg}`,
+                            borderBottom: `1px solid ${colors.border.subtle}`,
+                            backgroundColor: `${colors.warning.default}08`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: spacing.sm,
+                          })}>
+                            <div style={styles({ minWidth: 0 })}>
+                              <div style={styles({ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', color: colors.warning.default })}>
+                                READY TO TOGGLE
+                              </div>
+                              <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.primary, wordBreak: 'break-word' })}>
+                                {lastImpersonatedEmail}
+                              </div>
+                              {impersonationError ? (
+                                <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.error.default })}>
+                                  {impersonationError}
+                                </div>
+                              ) : null}
+                            </div>
+                            <button
+                              onClick={() => { setShowProfileMenu(false); resumeLastImpersonation(); }}
+                              disabled={startingImpersonation}
+                              title="Assume last user"
+                              style={styles({
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: radius.full,
+                                border: `1px solid ${colors.warning.default}`,
+                                backgroundColor: colors.bg.surface,
+                                color: colors.text.primary,
+                                cursor: startingImpersonation ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              })}
+                            >
+                              <RotateCw size={16} />
+                            </button>
                           </div>
                         )}
                         <div style={styles({ padding: spacing.sm })}>

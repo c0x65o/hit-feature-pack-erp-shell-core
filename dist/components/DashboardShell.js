@@ -20,6 +20,7 @@ const THEME_STORAGE_KEY = 'erp-shell-core-theme';
 const THEME_COOKIE_KEY = 'erp-shell-core-theme';
 const TOKEN_COOKIE_KEY = 'hit_token';
 const ORIGINAL_TOKEN_STORAGE_KEY = 'hit_token_original';
+const LAST_IMPERSONATED_EMAIL_KEY = 'hit_last_impersonated_email';
 const MENU_OPEN_KEY = 'erp-shell-core-menu-open';
 const EXPANDED_NODES_KEY = 'erp-shell-core-expanded-nodes';
 const NAV_SCROLL_KEY = 'erp-shell-core-nav-scroll';
@@ -564,6 +565,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const [authToken, setAuthTokenState] = useState(null);
     const [endingImpersonation, setEndingImpersonation] = useState(false);
     const [impersonationError, setImpersonationError] = useState(null);
+    const [startingImpersonation, setStartingImpersonation] = useState(false);
+    const [lastImpersonatedEmail, setLastImpersonatedEmail] = useState(null);
     // Initialize theme from DOM (set by blocking script) to prevent flash
     const [themePreference, setThemePreference] = useState(() => {
         // Read from localStorage/cookie on client
@@ -612,7 +615,13 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const fileInputRef = React.useRef(null);
     // Keep a lightweight view of the auth token for impersonation UX (token swaps happen without remounting the shell).
     useEffect(() => {
-        const refresh = () => setAuthTokenState(getStoredToken());
+        const refresh = () => {
+            setAuthTokenState(getStoredToken());
+            if (typeof window !== 'undefined') {
+                const v = window.localStorage.getItem(LAST_IMPERSONATED_EMAIL_KEY);
+                setLastImpersonatedEmail(v && v.trim() ? v.trim() : null);
+            }
+        };
         refresh();
         const t = window.setInterval(refresh, 1000);
         return () => window.clearInterval(t);
@@ -627,7 +636,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             by: fromClaims ? by : undefined,
         };
     }, [authToken]);
-    const endImpersonation = useCallback(async () => {
+    const endImpersonation = useCallback(async ({ clearLast }) => {
         if (endingImpersonation)
             return;
         const token = getStoredToken();
@@ -652,6 +661,8 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             }
             if (typeof window !== 'undefined') {
                 localStorage.removeItem(ORIGINAL_TOKEN_STORAGE_KEY);
+                if (clearLast)
+                    localStorage.removeItem(LAST_IMPERSONATED_EMAIL_KEY);
             }
             setAuthToken(nextToken);
             window.location.reload();
@@ -663,6 +674,46 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             setEndingImpersonation(false);
         }
     }, [endingImpersonation]);
+    const resumeLastImpersonation = useCallback(async () => {
+        if (startingImpersonation)
+            return;
+        const token = getStoredToken();
+        if (!token)
+            return;
+        if (typeof window === 'undefined')
+            return;
+        const lastEmail = localStorage.getItem(LAST_IMPERSONATED_EMAIL_KEY) || '';
+        if (!lastEmail.trim())
+            return;
+        setImpersonationError(null);
+        setStartingImpersonation(true);
+        try {
+            // Stash admin token so we can toggle back.
+            localStorage.setItem(ORIGINAL_TOKEN_STORAGE_KEY, token);
+            const res = await fetch('/api/proxy/auth/impersonate/start', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ user_email: lastEmail }),
+            });
+            if (!res.ok) {
+                const txt = await res.text().catch(() => '');
+                throw new Error(txt || 'Failed to start impersonation');
+            }
+            const json = await res.json();
+            const nextToken = json?.token;
+            if (!nextToken)
+                throw new Error('Impersonation did not return a token');
+            setAuthToken(nextToken);
+            window.location.reload();
+        }
+        catch (err) {
+            setImpersonationError(err instanceof Error ? err.message : 'Failed to start impersonation');
+        }
+        finally {
+            setStartingImpersonation(false);
+        }
+    }, [startingImpersonation]);
     const setMenuOpen = useCallback((open) => {
         setMenuOpenState(open);
         if (typeof window !== 'undefined') {
@@ -2051,16 +2102,48 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                             display: 'flex',
                                                                             flexDirection: 'column',
                                                                             gap: spacing.xs,
-                                                                        }), children: [_jsx("div", { style: styles({ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', color: colors.warning.default }), children: "ASSUMING USER" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.primary, wordBreak: 'break-word' }), children: currentUser?.email || 'Unknown user' }), impersonation.by ? (_jsxs("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: ["Admin: ", impersonation.by] })) : null, impersonationError ? (_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.error.default }), children: impersonationError })) : null, _jsx("div", { style: styles({ marginTop: spacing.xs, display: 'flex', justifyContent: 'flex-end' }), children: _jsx("button", { onClick: () => { setShowProfileMenu(false); endImpersonation(); }, disabled: endingImpersonation, style: styles({
-                                                                                        padding: `${spacing.xs} ${spacing.md}`,
-                                                                                        borderRadius: radius.md,
-                                                                                        border: `1px solid ${colors.warning.default}`,
-                                                                                        backgroundColor: colors.bg.surface,
-                                                                                        color: colors.text.primary,
-                                                                                        cursor: endingImpersonation ? 'not-allowed' : 'pointer',
-                                                                                        fontSize: ts.bodySmall.fontSize,
-                                                                                        fontWeight: 700,
-                                                                                    }), children: endingImpersonation ? 'Exiting…' : 'Exit assume' }) })] })), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
+                                                                        }), children: [_jsx("div", { style: styles({ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', color: colors.warning.default }), children: "ASSUMING USER" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.primary, wordBreak: 'break-word' }), children: currentUser?.email || 'Unknown user' }), impersonation.by ? (_jsxs("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: ["Admin: ", impersonation.by] })) : null, impersonationError ? (_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.error.default }), children: impersonationError })) : null, _jsxs("div", { style: styles({ marginTop: spacing.xs, display: 'flex', justifyContent: 'flex-end', gap: spacing.sm }), children: [_jsx("button", { onClick: () => { setShowProfileMenu(false); endImpersonation({ clearLast: false }); }, disabled: endingImpersonation, title: "Switch back (keeps this user ready to re-assume)", style: styles({
+                                                                                            width: '34px',
+                                                                                            height: '34px',
+                                                                                            borderRadius: radius.full,
+                                                                                            border: `1px solid ${colors.warning.default}`,
+                                                                                            backgroundColor: colors.bg.surface,
+                                                                                            color: colors.text.primary,
+                                                                                            cursor: endingImpersonation ? 'not-allowed' : 'pointer',
+                                                                                            display: 'flex',
+                                                                                            alignItems: 'center',
+                                                                                            justifyContent: 'center',
+                                                                                            flexShrink: 0,
+                                                                                        }), children: _jsx(RotateCw, { size: 16 }) }), _jsx("button", { onClick: () => { setShowProfileMenu(false); endImpersonation({ clearLast: true }); }, disabled: endingImpersonation, style: styles({
+                                                                                            padding: `${spacing.xs} ${spacing.md}`,
+                                                                                            borderRadius: radius.md,
+                                                                                            border: `1px solid ${colors.warning.default}`,
+                                                                                            backgroundColor: colors.bg.surface,
+                                                                                            color: colors.text.primary,
+                                                                                            cursor: endingImpersonation ? 'not-allowed' : 'pointer',
+                                                                                            fontSize: ts.bodySmall.fontSize,
+                                                                                            fontWeight: 700,
+                                                                                        }), children: endingImpersonation ? 'Exiting…' : 'Exit assume' })] })] })), !impersonation.active && lastImpersonatedEmail && (currentUser?.roles?.includes('admin') || currentUser?.roles?.includes('owner')) && (_jsxs("div", { style: styles({
+                                                                            padding: `${spacing.sm} ${spacing.lg}`,
+                                                                            borderBottom: `1px solid ${colors.border.subtle}`,
+                                                                            backgroundColor: `${colors.warning.default}08`,
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'space-between',
+                                                                            gap: spacing.sm,
+                                                                        }), children: [_jsxs("div", { style: styles({ minWidth: 0 }), children: [_jsx("div", { style: styles({ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', color: colors.warning.default }), children: "READY TO TOGGLE" }), _jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.primary, wordBreak: 'break-word' }), children: lastImpersonatedEmail }), impersonationError ? (_jsx("div", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.error.default }), children: impersonationError })) : null] }), _jsx("button", { onClick: () => { setShowProfileMenu(false); resumeLastImpersonation(); }, disabled: startingImpersonation, title: "Assume last user", style: styles({
+                                                                                    width: '34px',
+                                                                                    height: '34px',
+                                                                                    borderRadius: radius.full,
+                                                                                    border: `1px solid ${colors.warning.default}`,
+                                                                                    backgroundColor: colors.bg.surface,
+                                                                                    color: colors.text.primary,
+                                                                                    cursor: startingImpersonation ? 'not-allowed' : 'pointer',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    flexShrink: 0,
+                                                                                }), children: _jsx(RotateCw, { size: 16 }) })] })), _jsxs("div", { style: styles({ padding: spacing.sm }), children: [_jsxs("button", { onClick: openProfileModal, style: styles({
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
                                                                                     gap: spacing.sm,
