@@ -3468,18 +3468,20 @@ function ShellContent({
               </div>
             </div>
           </div>
-          {imageToCrop && (
-            <ProfilePictureCropModal
-              open={cropModalOpen}
-              onClose={() => {
-                setCropModalOpen(false);
-                setImageToCrop(null);
-              }}
-              imageSrc={imageToCrop}
-              onCropComplete={handleCropComplete}
-            />
-          )}
         </>
+      )}
+
+      {/* Crop modal rendered OUTSIDE profile modal to ensure proper z-index stacking */}
+      {imageToCrop && (
+        <ProfilePictureCropModal
+          open={cropModalOpen}
+          onClose={() => {
+            setCropModalOpen(false);
+            setImageToCrop(null);
+          }}
+          imageSrc={imageToCrop}
+          onCropComplete={handleCropComplete}
+        />
       )}
     </ShellContext.Provider>
   );
