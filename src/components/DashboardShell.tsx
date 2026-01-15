@@ -1696,7 +1696,8 @@ function ShellContent({
         });
         if (fieldsResponse.ok) {
           const fieldsData = await fieldsResponse.json().catch(() => []);
-          setProfileFieldMetadata(fieldsData || []);
+          // Defensive: endpoint may return an error object (or null), but UI expects an array.
+          setProfileFieldMetadata(Array.isArray(fieldsData) ? fieldsData : []);
         }
       } catch (fieldsError) {
         // Silently fail if profile fields feature is not enabled
@@ -3267,7 +3268,7 @@ function ShellContent({
                 )}
 
                 {/* Profile Fields - Integrated (including email) */}
-                {profileFieldMetadata
+                {[...profileFieldMetadata]
                   .sort((a, b) => a.display_order - b.display_order)
                   .map((fieldMeta) => {
                     const isAdmin =
