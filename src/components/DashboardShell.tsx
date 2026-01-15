@@ -89,13 +89,6 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
   }
 }
 
-function isTokenValid(token: string | null): boolean {
-  if (!token) return false;
-  const payload = decodeJwtPayload(token);
-  if (!payload) return false;
-  return !payload.exp || Date.now() / 1000 < payload.exp;
-}
-
 function setAuthToken(token: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(TOKEN_COOKIE_KEY, token);
@@ -1667,24 +1660,16 @@ function ShellContent({
     setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
     try {
       const token = getStoredToken();
-      if (!token) {
-        throw new Error('You must be signed in to update your profile.');
-      }
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
       
       // Fetch user profile data using /me endpoint
       const response = await fetch(`/api/proxy/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
+        credentials: 'include',
       });
       if (response.status === 401) {
-        if (!isTokenValid(token)) {
-          onLogout?.();
-        } else {
-          setProfileStatus((prev) => ({
-            ...prev,
-            error: 'Profile not available. Try again in a moment.',
-            success: null,
-          }));
-        }
+        throw new Error('You must be signed in to update your profile.');
         return;
       }
       const data = await response.json().catch(() => ({}));
@@ -1706,7 +1691,8 @@ function ShellContent({
       // Fetch profile field metadata (including email)
       try {
         const fieldsResponse = await fetch(`/api/proxy/auth/me/profile-fields`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
+          credentials: 'include',
         });
         if (fieldsResponse.ok) {
           const fieldsData = await fieldsResponse.json().catch(() => []);
@@ -1723,7 +1709,7 @@ function ShellContent({
       if (hrmEnabled) {
         try {
           const eRes = await fetch('/api/hrm/employees/me', {
-            headers: { Authorization: `Bearer ${token}` },
+            headers,
             credentials: 'include',
           });
           if (eRes.status === 404) {
