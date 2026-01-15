@@ -89,6 +89,13 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
   }
 }
 
+function isTokenValid(token: string | null): boolean {
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return false;
+  return !payload.exp || Date.now() / 1000 < payload.exp;
+}
+
 function setAuthToken(token: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(TOKEN_COOKIE_KEY, token);
@@ -1668,6 +1675,18 @@ function ShellContent({
       const response = await fetch(`/api/proxy/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (response.status === 401) {
+        if (!isTokenValid(token)) {
+          onLogout?.();
+        } else {
+          setProfileStatus((prev) => ({
+            ...prev,
+            error: 'Profile not available. Try again in a moment.',
+            success: null,
+          }));
+        }
+        return;
+      }
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data?.detail || data?.error || 'Unable to load profile');
@@ -1730,7 +1749,7 @@ function ShellContent({
         success: null,
       }));
     }
-  }, [currentUser?.email, hrmEnabled]);
+  }, [currentUser?.email, hrmEnabled, onLogout]);
 
   const handleProfileSave = useCallback(async () => {
     if (!currentUser?.email) {

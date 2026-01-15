@@ -61,6 +61,14 @@ function decodeJwtPayload(token) {
         return null;
     }
 }
+function isTokenValid(token) {
+    if (!token)
+        return false;
+    const payload = decodeJwtPayload(token);
+    if (!payload)
+        return false;
+    return !payload.exp || Date.now() / 1000 < payload.exp;
+}
 function setAuthToken(token) {
     if (typeof window === 'undefined')
         return;
@@ -1407,6 +1415,19 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             const response = await fetch(`/api/proxy/auth/me`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+            if (response.status === 401) {
+                if (!isTokenValid(token)) {
+                    onLogout?.();
+                }
+                else {
+                    setProfileStatus((prev) => ({
+                        ...prev,
+                        error: 'Profile not available. Try again in a moment.',
+                        success: null,
+                    }));
+                }
+                return;
+            }
             const data = await response.json().catch(() => ({}));
             if (!response.ok) {
                 throw new Error(data?.detail || data?.error || 'Unable to load profile');
@@ -1469,7 +1490,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 success: null,
             }));
         }
-    }, [currentUser?.email, hrmEnabled]);
+    }, [currentUser?.email, hrmEnabled, onLogout]);
     const handleProfileSave = useCallback(async () => {
         if (!currentUser?.email) {
             setProfileStatus({ saving: false, error: 'No user loaded.', success: null });

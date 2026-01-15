@@ -26,15 +26,13 @@ async function callSameOrigin(request: NextRequest, path: string, init: RequestI
   const target = `${url.origin}${path}`;
 
   const headers = new Headers(init.headers || {});
-  // Forward caller auth + service token if present.
+  // Forward caller auth.
   // IMPORTANT: In most deployments auth is cookie-based (no Authorization header on browser requests),
   // so we must forward cookies for internal same-origin fetches to preserve identity.
   const auth = request.headers.get('authorization') || request.headers.get('Authorization');
   if (auth) headers.set('Authorization', auth);
   const cookie = request.headers.get('cookie') || request.headers.get('Cookie');
   if (cookie) headers.set('Cookie', cookie);
-  const svc = request.headers.get('x-hit-service-token') || request.headers.get('X-HIT-Service-Token');
-  if (svc) headers.set('X-HIT-Service-Token', svc);
 
   return fetch(target, { ...init, headers });
 }
