@@ -2465,10 +2465,10 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                         fontWeight: ts.label.fontWeight,
                                                         cursor: profileStatus.saving ? 'wait' : 'pointer',
                                                         opacity: profileStatus.saving ? 0.8 : 1,
-                                                    }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] })] }) })] })), imageToCrop && (_jsx(ProfilePictureCropModal, { open: cropModalOpen, onClose: () => {
-                    setCropModalOpen(false);
-                    setImageToCrop(null);
-                }, imageSrc: imageToCrop, onCropComplete: handleCropComplete }))] }));
+                                                    }), children: profileStatus.saving ? 'Saving…' : 'Save changes' })] })] })] }) })] })), imageToCrop && (_jsx("div", { style: { position: 'fixed', inset: 0, zIndex: 200 }, children: _jsx(ProfilePictureCropModal, { open: cropModalOpen, onClose: () => {
+                        setCropModalOpen(false);
+                        setImageToCrop(null);
+                    }, imageSrc: imageToCrop, onCropComplete: handleCropComplete }) }))] }));
 }
 export function DashboardShell({ children, config: configProp = {}, navItems = [], user = null, activePath = '/', onNavigate, onLogout, initialNotifications = [], connectionStatus = 'disconnected', version, }) {
     const debugNav = typeof window !== 'undefined' &&

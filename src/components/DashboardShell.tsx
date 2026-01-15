@@ -3471,17 +3471,19 @@ function ShellContent({
         </>
       )}
 
-      {/* Crop modal rendered OUTSIDE profile modal to ensure proper z-index stacking */}
+      {/* Crop modal rendered OUTSIDE profile modal with high z-index wrapper to appear above the profile modal's backdrop (zIndex: 90) */}
       {imageToCrop && (
-        <ProfilePictureCropModal
-          open={cropModalOpen}
-          onClose={() => {
-            setCropModalOpen(false);
-            setImageToCrop(null);
-          }}
-          imageSrc={imageToCrop}
-          onCropComplete={handleCropComplete}
-        />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200 }}>
+          <ProfilePictureCropModal
+            open={cropModalOpen}
+            onClose={() => {
+              setCropModalOpen(false);
+              setImageToCrop(null);
+            }}
+            imageSrc={imageToCrop}
+            onCropComplete={handleCropComplete}
+          />
+        </div>
       )}
     </ShellContext.Provider>
   );
