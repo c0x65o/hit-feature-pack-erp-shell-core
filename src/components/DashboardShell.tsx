@@ -1048,6 +1048,19 @@ function ShellContent({
           lastName: String(employee?.lastName || employee?.last_name || '').trim(),
           preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
         });
+        const hrmPhoto =
+          String(employee?.profilePictureUrl || employee?.profile_picture_url || '').trim() || null;
+        if (hrmPhoto) {
+          setProfilePictureUrl(hrmPhoto);
+          setCurrentUser((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  avatar: hrmPhoto || undefined,
+                }
+              : null
+          );
+        }
       } catch {
         // Ignore (optional feature)
       }
@@ -1074,6 +1087,20 @@ function ShellContent({
   useEffect(() => {
     if (!currentUser?.email || currentUser?.avatar) {
       return; // Skip if no user or avatar already exists
+    }
+
+    // If HRM is installed, employee owns the photo; don't fetch from auth.
+    if (hrmEnabled) {
+      const hrmPhoto =
+        String((hrmEmployee as any)?.profilePictureUrl || (hrmEmployee as any)?.profile_picture_url || '').trim() ||
+        null;
+      if (hrmPhoto) {
+        setCurrentUser((prev) => {
+          if (!prev || prev.email !== currentUser.email || prev.avatar) return prev;
+          return { ...prev, avatar: hrmPhoto };
+        });
+      }
+      return;
     }
 
     const email = currentUser.email;
@@ -1116,7 +1143,7 @@ function ShellContent({
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.email]); // Only run when email changes
+  }, [currentUser?.email, currentUser?.avatar, hrmEnabled, hrmEmployee]); // Only run when email changes (and HRM status)
 
   // Listen for user profile updates (e.g., after picture upload)
   useEffect(() => {
@@ -1724,6 +1751,19 @@ function ShellContent({
               lastName: String(employee?.lastName || employee?.last_name || '').trim(),
               preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
             });
+            const hrmPhoto =
+              String(employee?.profilePictureUrl || employee?.profile_picture_url || '').trim() || null;
+            if (hrmPhoto) {
+              setProfilePictureUrl(hrmPhoto);
+              setCurrentUser((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      avatar: hrmPhoto || undefined,
+                    }
+                  : null
+              );
+            }
           }
         } catch {
           // optional
@@ -1916,13 +1956,20 @@ function ShellContent({
         throw new Error('You must be signed in to update your profile.');
       }
 
-      // Update profile picture using PUT /me endpoint with base64 string
-      const response = await fetch(`/api/proxy/auth/me`, {
+      const employeeId = String((hrmEmployee as any)?.id || '').trim();
+      const useHrm = hrmEnabled && employeeId;
+      if (hrmEnabled && !employeeId) {
+        throw new Error('Employee record not loaded yet. Please try again in a moment.');
+      }
+
+      // HRM owns the employee photo; fall back to auth only when HRM is not installed.
+      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/proxy/auth/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ profile_picture_url: croppedImageBase64 }),
       });
 
@@ -1962,7 +2009,7 @@ function ShellContent({
       setUploadingPicture(false);
       setImageToCrop(null);
     }
-  }, [currentUser?.email]);
+  }, [currentUser?.email, hrmEnabled, hrmEmployee]);
 
   const handlePictureDelete = useCallback(async () => {
     if (!currentUser?.email) return;
@@ -1978,13 +2025,20 @@ function ShellContent({
         throw new Error('You must be signed in to update your profile.');
       }
 
-      // Delete profile picture by setting it to null via PUT /me
-      const response = await fetch(`/api/proxy/auth/me`, {
+      const employeeId = String((hrmEmployee as any)?.id || '').trim();
+      const useHrm = hrmEnabled && employeeId;
+      if (hrmEnabled && !employeeId) {
+        throw new Error('Employee record not loaded yet. Please try again in a moment.');
+      }
+
+      // HRM owns the employee photo; fall back to auth only when HRM is not installed.
+      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/proxy/auth/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ profile_picture_url: null }),
       });
 
@@ -2023,7 +2077,7 @@ function ShellContent({
     } finally {
       setUploadingPicture(false);
     }
-  }, [currentUser?.email]);
+  }, [currentUser?.email, hrmEnabled, hrmEmployee]);
 
   const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();

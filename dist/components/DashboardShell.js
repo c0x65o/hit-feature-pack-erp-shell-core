@@ -61,14 +61,6 @@ function decodeJwtPayload(token) {
         return null;
     }
 }
-function isTokenValid(token) {
-    if (!token)
-        return false;
-    const payload = decodeJwtPayload(token);
-    if (!payload)
-        return false;
-    return !payload.exp || Date.now() / 1000 < payload.exp;
-}
 function setAuthToken(token) {
     if (typeof window === 'undefined')
         return;
@@ -821,6 +813,16 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                     lastName: String(employee?.lastName || employee?.last_name || '').trim(),
                     preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
                 });
+                const hrmPhoto = String(employee?.profilePictureUrl || employee?.profile_picture_url || '').trim() || null;
+                if (hrmPhoto) {
+                    setProfilePictureUrl(hrmPhoto);
+                    setCurrentUser((prev) => prev
+                        ? {
+                            ...prev,
+                            avatar: hrmPhoto || undefined,
+                        }
+                        : null);
+                }
             }
             catch {
                 // Ignore (optional feature)
@@ -849,6 +851,19 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     useEffect(() => {
         if (!currentUser?.email || currentUser?.avatar) {
             return; // Skip if no user or avatar already exists
+        }
+        // If HRM is installed, employee owns the photo; don't fetch from auth.
+        if (hrmEnabled) {
+            const hrmPhoto = String(hrmEmployee?.profilePictureUrl || hrmEmployee?.profile_picture_url || '').trim() ||
+                null;
+            if (hrmPhoto) {
+                setCurrentUser((prev) => {
+                    if (!prev || prev.email !== currentUser.email || prev.avatar)
+                        return prev;
+                    return { ...prev, avatar: hrmPhoto };
+                });
+            }
+            return;
         }
         const email = currentUser.email;
         let cancelled = false;
@@ -889,7 +904,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         return () => {
             cancelled = true;
         };
-    }, [currentUser?.email]); // Only run when email changes
+    }, [currentUser?.email, currentUser?.avatar, hrmEnabled, hrmEmployee]); // Only run when email changes (and HRM status)
     // Listen for user profile updates (e.g., after picture upload)
     useEffect(() => {
         const handleUserProfileUpdate = async (event) => {
@@ -1408,24 +1423,16 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         setProfileStatus((prev) => ({ ...prev, error: null, success: null }));
         try {
             const token = getStoredToken();
-            if (!token) {
-                throw new Error('You must be signed in to update your profile.');
-            }
+            const headers = {};
+            if (token)
+                headers.Authorization = `Bearer ${token}`;
             // Fetch user profile data using /me endpoint
             const response = await fetch(`/api/proxy/auth/me`, {
-                headers: { Authorization: `Bearer ${token}` },
+                headers,
+                credentials: 'include',
             });
             if (response.status === 401) {
-                if (!isTokenValid(token)) {
-                    onLogout?.();
-                }
-                else {
-                    setProfileStatus((prev) => ({
-                        ...prev,
-                        error: 'Profile not available. Try again in a moment.',
-                        success: null,
-                    }));
-                }
+                throw new Error('You must be signed in to update your profile.');
                 return;
             }
             const data = await response.json().catch(() => ({}));
@@ -1445,11 +1452,13 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             // Fetch profile field metadata (including email)
             try {
                 const fieldsResponse = await fetch(`/api/proxy/auth/me/profile-fields`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                    headers,
+                    credentials: 'include',
                 });
                 if (fieldsResponse.ok) {
                     const fieldsData = await fieldsResponse.json().catch(() => []);
-                    setProfileFieldMetadata(fieldsData || []);
+                    // Defensive: endpoint may return an error object (or null), but UI expects an array.
+                    setProfileFieldMetadata(Array.isArray(fieldsData) ? fieldsData : []);
                 }
             }
             catch (fieldsError) {
@@ -1461,7 +1470,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (hrmEnabled) {
                 try {
                     const eRes = await fetch('/api/hrm/employees/me', {
-                        headers: { Authorization: `Bearer ${token}` },
+                        headers,
                         credentials: 'include',
                     });
                     if (eRes.status === 404) {
@@ -1476,6 +1485,16 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                             lastName: String(employee?.lastName || employee?.last_name || '').trim(),
                             preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
                         });
+                        const hrmPhoto = String(employee?.profilePictureUrl || employee?.profile_picture_url || '').trim() || null;
+                        if (hrmPhoto) {
+                            setProfilePictureUrl(hrmPhoto);
+                            setCurrentUser((prev) => prev
+                                ? {
+                                    ...prev,
+                                    avatar: hrmPhoto || undefined,
+                                }
+                                : null);
+                        }
                     }
                 }
                 catch {
@@ -1657,13 +1676,19 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (!token) {
                 throw new Error('You must be signed in to update your profile.');
             }
-            // Update profile picture using PUT /me endpoint with base64 string
-            const response = await fetch(`/api/proxy/auth/me`, {
+            const employeeId = String(hrmEmployee?.id || '').trim();
+            const useHrm = hrmEnabled && employeeId;
+            if (hrmEnabled && !employeeId) {
+                throw new Error('Employee record not loaded yet. Please try again in a moment.');
+            }
+            // HRM owns the employee photo; fall back to auth only when HRM is not installed.
+            const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/proxy/auth/me`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
+                credentials: 'include',
                 body: JSON.stringify({ profile_picture_url: croppedImageBase64 }),
             });
             const data = await response.json().catch(() => ({}));
@@ -1700,7 +1725,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             setUploadingPicture(false);
             setImageToCrop(null);
         }
-    }, [currentUser?.email]);
+    }, [currentUser?.email, hrmEnabled, hrmEmployee]);
     const handlePictureDelete = useCallback(async () => {
         if (!currentUser?.email)
             return;
@@ -1713,13 +1738,19 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (!token) {
                 throw new Error('You must be signed in to update your profile.');
             }
-            // Delete profile picture by setting it to null via PUT /me
-            const response = await fetch(`/api/proxy/auth/me`, {
+            const employeeId = String(hrmEmployee?.id || '').trim();
+            const useHrm = hrmEnabled && employeeId;
+            if (hrmEnabled && !employeeId) {
+                throw new Error('Employee record not loaded yet. Please try again in a moment.');
+            }
+            // HRM owns the employee photo; fall back to auth only when HRM is not installed.
+            const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/proxy/auth/me`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
+                credentials: 'include',
                 body: JSON.stringify({ profile_picture_url: null }),
             });
             const data = await response.json().catch(() => ({}));
@@ -1755,7 +1786,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         finally {
             setUploadingPicture(false);
         }
-    }, [currentUser?.email]);
+    }, [currentUser?.email, hrmEnabled, hrmEmployee]);
     const triggerFileInput = useCallback(() => {
         fileInputRef.current?.click();
     }, []);
@@ -2365,7 +2396,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                         backgroundColor: colors.bg.page,
                                                                         color: colors.text.primary,
                                                                         fontSize: ts.body.fontSize,
-                                                                    }) })] })] })] })), profileFieldMetadata
+                                                                    }) })] })] })] })), [...profileFieldMetadata]
                                             .sort((a, b) => a.display_order - b.display_order)
                                             .map((fieldMeta) => {
                                             const isAdmin = (currentUser?.roles || []).map((r) => String(r || '').toLowerCase()).includes('admin');
