@@ -195,7 +195,7 @@ permissions:
     #
     # Scope modes:
     # - none: deny all access for this verb/entity (hide pages + block APIs)
-    # - any: ignore scope (read everything)
+    # - all: ignore scope (read everything)
     # - own: only owned records (not applicable for logs - logs are system-level)
     # - ldd: owner OR matching L/D/D (not applicable for logs - logs are system-level)
     #
@@ -206,8 +206,8 @@ permissions:
       label: "ERP Shell Core Read Scope = None"
       description: "Deny all ERP Shell Core read access."
       default_enabled: false
-    - key: erp-shell-core.read.scope.any
-      label: "ERP Shell Core Read Scope = Any"
+    - key: erp-shell-core.read.scope.all
+      label: "ERP Shell Core Read Scope = All"
       description: "Read all ERP Shell Core entities regardless of scope."
       default_enabled: false
     - key: erp-shell-core.read.scope.own
@@ -220,8 +220,8 @@ permissions:
       label: "ERP Shell Core Logs Read Scope = None"
       description: "Deny all log read access."
       default_enabled: false
-    - key: erp-shell-core.logs.read.scope.any
-      label: "ERP Shell Core Logs Read Scope = Any"
+    - key: erp-shell-core.logs.read.scope.all
+      label: "ERP Shell Core Logs Read Scope = All"
       description: "Read logs regardless of scope (admin-only in practice)."
       default_enabled: false
     - key: erp-shell-core.logs.read.scope.own
