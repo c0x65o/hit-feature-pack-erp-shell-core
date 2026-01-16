@@ -4,7 +4,8 @@ import { getDb } from '@/lib/db';
 import { tableViews, tableViewFilters, tableViewShares, } from '@/lib/feature-pack-schemas';
 import { eq, desc, and, inArray, or, sql } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
-import { resolveUserPrincipals } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
+import { resolveUserPrincipals, resolveUserOrgScope } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
+import { getStaticViewsForTable } from '../lib/static-table-views';
 // Required for Next.js App Router
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,6 +31,11 @@ export async function GET(request) {
         if (!tableId) {
             return NextResponse.json({ error: 'tableId is required' }, { status: 400 });
         }
+        // Static system/default views (schema-defined).
+        // These do NOT live in the DB and are read-only.
+        const staticSystemViews = getStaticViewsForTable(tableId);
+        const staticSystemIds = new Set(staticSystemViews.map((v) => v.id));
+        const staticSystemNames = new Set(staticSystemViews.map((v) => String(v.name || '').trim().toLowerCase()).filter(Boolean));
         // Get user's custom views
         const userViews = await db
             .select()
@@ -37,16 +43,31 @@ export async function GET(request) {
             .where(and(eq(tableViews.userId, user.sub), eq(tableViews.tableId, tableId), eq(tableViews.isSystem, false)))
             .orderBy(desc(tableViews.lastUsedAt), desc(tableViews.createdAt));
         // Get system/default views for this table (default views first, then by creation)
-        const systemViews = await db
+        const systemViewsRaw = await db
             .select()
             .from(tableViews)
             .where(and(eq(tableViews.tableId, tableId), eq(tableViews.isSystem, true)))
             .orderBy(desc(tableViews.isDefault), desc(tableViews.createdAt));
+        // De-dupe DB system views that collide with schema-defined views.
+        // - Prefer schema-defined (single source of truth)
+        // - Also drop by (tableId,name) because some older migrations didn't use stable IDs
+        const systemViews = systemViewsRaw.filter((v) => {
+            if (staticSystemIds.has(v.id))
+                return false;
+            const nm = String(v.name || '').trim().toLowerCase();
+            if (nm && staticSystemNames.has(nm))
+                return false;
+            return true;
+        });
         // Build conditions for views shared with user
         // Shared with: user directly, or their groups, or their roles
         const principals = await resolveUserPrincipals({ request, user });
         const userGroups = principals.groupIds || [];
         const userRoles = principals.roles || [];
+        const orgScope = await resolveUserOrgScope({ request, user });
+        const divisionIds = orgScope.divisionIds || [];
+        const departmentIds = orgScope.departmentIds || [];
+        const locationIds = orgScope.locationIds || [];
         const shareConditions = [
             // Direct user share
             and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, user.sub)),
@@ -63,6 +84,17 @@ export async function GET(request) {
         // Add role shares if user has roles
         if (userRoles.length > 0) {
             shareConditions.push(and(eq(tableViewShares.principalType, 'role'), inArray(tableViewShares.principalId, userRoles)));
+        }
+        // Add LDD shares (Location/Division/Department) if user has scope ids
+        if (divisionIds.length > 0) {
+            // principalType is a DB enum in some installs; compare via ::text so unknown values don't error.
+            shareConditions.push(and(sql `${tableViewShares.principalType}::text = ${'division'}`, inArray(tableViewShares.principalId, divisionIds)));
+        }
+        if (departmentIds.length > 0) {
+            shareConditions.push(and(sql `${tableViewShares.principalType}::text = ${'department'}`, inArray(tableViewShares.principalId, departmentIds)));
+        }
+        if (locationIds.length > 0) {
+            shareConditions.push(and(sql `${tableViewShares.principalType}::text = ${'location'}`, inArray(tableViewShares.principalId, locationIds)));
         }
         // Get views shared with this user (but not owned by them)
         const sharedViewsData = await db
@@ -109,7 +141,12 @@ export async function GET(request) {
         }
         // Build response with all views categorized
         const viewsWithFilters = [
-            // System views first
+            // Schema-defined system views first (read-only)
+            ...staticSystemViews.map((view) => ({
+                ...view,
+                _category: 'system',
+            })),
+            // DB system views (legacy / admin-created)
             ...systemViews.map((view) => ({
                 ...view,
                 filters: filtersMap.get(view.id) || [],

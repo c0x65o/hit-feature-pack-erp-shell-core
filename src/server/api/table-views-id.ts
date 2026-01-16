@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { tableViews, tableViewFilters } from '@/lib/feature-pack-schemas';
 import { eq, and, or } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
+import { getStaticViewById, isStaticViewId } from '../lib/static-table-views';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,6 +22,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const db = getDb();
     const viewId = params.id;
+
+    // Static (schema-defined) system views do not live in the DB.
+    const staticView = getStaticViewById(viewId);
+    if (staticView) {
+      return NextResponse.json({
+        data: staticView,
+      });
+    }
 
     // Get view (user's own views or system views)
     const [view] = await db
@@ -70,6 +79,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const db = getDb();
     const viewId = params.id;
+
+    if (isStaticViewId(viewId)) {
+      return NextResponse.json({ error: 'Cannot modify static system views' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { name, description, filters, columnVisibility, sorting, groupBy, isDefault, metadata } = body;
 
@@ -162,6 +176,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const db = getDb();
     const viewId = params.id;
+
+    if (isStaticViewId(viewId)) {
+      return NextResponse.json({ error: 'Cannot delete static system views' }, { status: 403 });
+    }
 
     // Get view
     const [existingView] = await db

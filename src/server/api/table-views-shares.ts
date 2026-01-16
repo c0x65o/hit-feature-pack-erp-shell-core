@@ -2,8 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { tableViews, tableViewShares } from '@/lib/feature-pack-schemas';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
+import { isStaticViewId } from '../lib/static-table-views';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -28,6 +29,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const db = getDb();
     const viewId = params.id;
+
+    if (isStaticViewId(viewId)) {
+      return NextResponse.json({ error: 'Cannot share static system views' }, { status: 400 });
+    }
 
     // Get view and verify ownership
     const [view] = await db
@@ -63,10 +68,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * POST /api/table-views/[id]/shares
  * Add a share entry for a view
  * 
- * Body: { principalType: 'user' | 'group' | 'role', principalId: string }
+ * Body: { principalType: 'user' | 'group' | 'role' | 'location' | 'division' | 'department', principalId: string }
  * 
  * Non-admins can only share with users (principalType: 'user')
- * Admins can share with users, groups, or roles
+ * Admins can share with users, groups, roles, or LDD
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -77,6 +82,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const db = getDb();
     const viewId = params.id;
+
+    if (isStaticViewId(viewId)) {
+      return NextResponse.json({ error: 'Cannot share static system views' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { principalType, principalId } = body;
 
@@ -85,14 +95,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'principalType and principalId are required' }, { status: 400 });
     }
 
-    if (!['user', 'group', 'role'].includes(principalType)) {
-      return NextResponse.json({ error: 'principalType must be user, group, or role' }, { status: 400 });
+    if (!['user', 'group', 'role', 'location', 'division', 'department'].includes(principalType)) {
+      return NextResponse.json({ error: 'principalType must be user, group, role, location, division, or department' }, { status: 400 });
     }
 
     // Non-admins can only share with users
     if (!isAdmin(user.roles) && principalType !== 'user') {
       return NextResponse.json({ 
-        error: 'Only admins can share views with groups or roles. You can share with individual users.' 
+        error: 'Only admins can share views with non-user principals (groups, roles, or LDD). You can share with individual users.' 
       }, { status: 403 });
     }
 
@@ -180,6 +190,11 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const db = getDb();
     const viewId = params.id;
+
+    if (isStaticViewId(viewId)) {
+      return NextResponse.json({ error: 'Cannot share static system views' }, { status: 400 });
+    }
+
     const { searchParams } = new URL(request.url);
     const principalType = searchParams.get('principalType');
     const principalId = searchParams.get('principalId');
@@ -206,12 +221,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     // Delete the share entry
+    // Use SQL cast for principalType to handle location/division/department values that aren't in the enum
     const deleted = await db
       .delete(tableViewShares)
       .where(
         and(
           eq(tableViewShares.viewId, viewId),
-          eq(tableViewShares.principalType, principalType as 'user' | 'group' | 'role'),
+          sql`${tableViewShares.principalType}::text = ${principalType}`,
           eq(tableViewShares.principalId, principalId)
         )
       )

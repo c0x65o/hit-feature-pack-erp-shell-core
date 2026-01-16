@@ -18,10 +18,10 @@ export declare function GET(request: NextRequest, { params }: {
  * POST /api/table-views/[id]/shares
  * Add a share entry for a view
  *
- * Body: { principalType: 'user' | 'group' | 'role', principalId: string }
+ * Body: { principalType: 'user' | 'group' | 'role' | 'location' | 'division' | 'department', principalId: string }
  *
  * Non-admins can only share with users (principalType: 'user')
- * Admins can share with users, groups, or roles
+ * Admins can share with users, groups, roles, or LDD
  */
 export declare function POST(request: NextRequest, { params }: {
     params: {

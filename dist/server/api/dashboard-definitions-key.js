@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
-import { resolveUserPrincipals } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
+import { resolveUserOrgScope, resolveUserPrincipals } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export async function GET(request, { params }) {
@@ -18,9 +18,17 @@ export async function GET(request, { params }) {
         const principals = await resolveUserPrincipals({ request, user });
         const userGroups = principals.groupIds || [];
         const userRoles = principals.roles || [];
+        const orgScope = await resolveUserOrgScope({ request, user });
+        const divisionIds = orgScope.divisionIds || [];
+        const departmentIds = orgScope.departmentIds || [];
+        const locationIds = orgScope.locationIds || [];
         const groupList = userGroups.map((g) => sql `${g}`);
         const roleList = userRoles.map((r) => sql `${r}`);
-        const sharedAccess = userGroups.length || userRoles.length
+        const divisionList = divisionIds.map((d) => sql `${d}`);
+        const departmentList = departmentIds.map((d) => sql `${d}`);
+        const locationList = locationIds.map((l) => sql `${l}`);
+        const hasNonUserShareTargets = userGroups.length || userRoles.length || divisionIds.length || departmentIds.length || locationIds.length;
+        const sharedAccess = hasNonUserShareTargets
             ? sql `exists (
             select 1
             from "dashboard_definition_shares" s
@@ -29,6 +37,9 @@ export async function GET(request, { params }) {
                 (s.principal_type = 'user' and s.principal_id = ${user.sub})
                 ${userGroups.length ? sql `or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql `, `)}))` : sql ``}
                 ${userRoles.length ? sql `or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql `, `)}))` : sql ``}
+                ${divisionIds.length ? sql `or (s.principal_type = 'division' and s.principal_id in (${sql.join(divisionList, sql `, `)}))` : sql ``}
+                ${departmentIds.length ? sql `or (s.principal_type = 'department' and s.principal_id in (${sql.join(departmentList, sql `, `)}))` : sql ``}
+                ${locationIds.length ? sql `or (s.principal_type = 'location' and s.principal_id in (${sql.join(locationList, sql `, `)}))` : sql ``}
               )
           )`
             : sql `exists (
@@ -58,6 +69,9 @@ export async function GET(request, { params }) {
               (s.principal_type = 'user' and s.principal_id = ${user.sub})
               ${userGroups.length ? sql `or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql `, `)}))` : sql ``}
               ${userRoles.length ? sql `or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql `, `)}))` : sql ``}
+              ${divisionIds.length ? sql `or (s.principal_type = 'division' and s.principal_id in (${sql.join(divisionList, sql `, `)}))` : sql ``}
+              ${departmentIds.length ? sql `or (s.principal_type = 'department' and s.principal_id in (${sql.join(departmentList, sql `, `)}))` : sql ``}
+              ${locationIds.length ? sql `or (s.principal_type = 'location' and s.principal_id in (${sql.join(locationList, sql `, `)}))` : sql ``}
             )
         ) as "isShared",
         (
@@ -70,6 +84,9 @@ export async function GET(request, { params }) {
                 (s.principal_type = 'user' and s.principal_id = ${user.sub})
                 ${userGroups.length ? sql `or (s.principal_type = 'group' and s.principal_id in (${sql.join(groupList, sql `, `)}))` : sql ``}
                 ${userRoles.length ? sql `or (s.principal_type = 'role' and s.principal_id in (${sql.join(roleList, sql `, `)}))` : sql ``}
+                ${divisionIds.length ? sql `or (s.principal_type = 'division' and s.principal_id in (${sql.join(divisionList, sql `, `)}))` : sql ``}
+                ${departmentIds.length ? sql `or (s.principal_type = 'department' and s.principal_id in (${sql.join(departmentList, sql `, `)}))` : sql ``}
+                ${locationIds.length ? sql `or (s.principal_type = 'location' and s.principal_id in (${sql.join(locationList, sql `, `)}))` : sql ``}
               )
           )
         ) as "canEdit"

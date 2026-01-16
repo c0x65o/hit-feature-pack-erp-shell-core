@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { tableViews } from '@/lib/feature-pack-schemas';
 import { eq } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
+import { isStaticViewId } from '../lib/static-table-views';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 /**
@@ -18,6 +19,10 @@ export async function PATCH(request, { params }) {
         }
         const db = getDb();
         const viewId = params.id;
+        // Static (schema-defined) views aren't stored in the DB.
+        if (isStaticViewId(viewId)) {
+            return NextResponse.json({ success: true });
+        }
         // Update lastUsedAt (allow system views too)
         await db
             .update(tableViews)

@@ -67,7 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: { key: str
 
 /**
  * POST: add share entry
- * Body: { principalType: 'user' | 'group' | 'role', principalId: string, permission?: 'view' | 'full' }
+ * Body: { principalType: 'user' | 'group' | 'role' | 'location' | 'division' | 'department', principalId: string, permission?: 'view' | 'full' }
  */
 export async function POST(request: NextRequest, { params }: { params: { key: string } }) {
   try {
@@ -86,11 +86,11 @@ export async function POST(request: NextRequest, { params }: { params: { key: st
     if (!principalType || !principalId) {
       return NextResponse.json({ error: 'principalType and principalId are required' }, { status: 400 });
     }
-    if (!['user', 'group', 'role'].includes(principalType)) {
-      return NextResponse.json({ error: 'principalType must be user, group, or role' }, { status: 400 });
+    if (!['user', 'group', 'role', 'location', 'division', 'department'].includes(principalType)) {
+      return NextResponse.json({ error: 'principalType must be user, group, role, location, division, or department' }, { status: 400 });
     }
     if (!isAdmin(user.roles) && principalType !== 'user') {
-      return NextResponse.json({ error: 'Only admins can share with groups or roles' }, { status: 403 });
+      return NextResponse.json({ error: 'Only admins can share with non-user principals (groups, roles, or LDD)' }, { status: 403 });
     }
 
     const db = getDb();

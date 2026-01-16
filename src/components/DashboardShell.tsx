@@ -330,7 +330,7 @@ async function checkPagePermissionsBatch(pagePaths: string[]): Promise<Record<st
   if (!pagePaths || pagePaths.length === 0) return {};
 
   try {
-    const res = await fetch(`/api/proxy/auth/permissions/pages/check-batch`, {
+    const res = await fetch(`/api/auth/permissions/pages/check-batch`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -889,7 +889,7 @@ function ShellContent({
     setImpersonationError(null);
     setEndingImpersonation(true);
     try {
-      const res = await fetch('/api/proxy/auth/impersonate/end', {
+      const res = await fetch('/api/auth/impersonate/end', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         credentials: 'include',
@@ -931,7 +931,7 @@ function ShellContent({
       // Stash admin token so we can toggle back.
       localStorage.setItem(ORIGINAL_TOKEN_STORAGE_KEY, token);
 
-      const res = await fetch('/api/proxy/auth/impersonate/start', {
+      const res = await fetch('/api/auth/impersonate/start', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1111,7 +1111,7 @@ function ShellContent({
         const token = getStoredToken();
         if (!token || cancelled) return;
 
-        const response = await fetch(`/api/proxy/auth/users/${encodeURIComponent(email)}`, {
+        const response = await fetch(`/api/auth/users/${encodeURIComponent(email)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -1166,7 +1166,7 @@ function ShellContent({
         const token = getStoredToken();
         if (!token) return;
 
-        const response = await fetch(`/api/proxy/auth/users/${encodeURIComponent(currentUser.email || '')}`, {
+        const response = await fetch(`/api/auth/users/${encodeURIComponent(currentUser.email || '')}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -1691,7 +1691,7 @@ function ShellContent({
       if (token) headers.Authorization = `Bearer ${token}`;
       
       // Fetch user profile data using /me endpoint
-      const response = await fetch(`/api/proxy/auth/me`, {
+      const response = await fetch(`/api/auth/me`, {
         headers,
         credentials: 'include',
       });
@@ -1717,7 +1717,7 @@ function ShellContent({
       
       // Fetch profile field metadata (including email)
       try {
-        const fieldsResponse = await fetch(`/api/proxy/auth/me/profile-fields`, {
+        const fieldsResponse = await fetch(`/api/auth/me/profile-fields`, {
           headers,
           credentials: 'include',
         });
@@ -1862,7 +1862,7 @@ function ShellContent({
         payload.profile_fields = nextProfileFields;
       }
 
-      const response = await fetch(`/api/proxy/auth/me`, {
+      const response = await fetch(`/api/auth/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1963,7 +1963,7 @@ function ShellContent({
       }
 
       // HRM owns the employee photo; fall back to auth only when HRM is not installed.
-      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/proxy/auth/me`, {
+      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/auth/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2032,7 +2032,7 @@ function ShellContent({
       }
 
       // HRM owns the employee photo; fall back to auth only when HRM is not installed.
-      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/proxy/auth/me`, {
+      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/auth/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

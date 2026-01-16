@@ -4,6 +4,9 @@ export declare const postBodySchema: z.ZodObject<{
         group: "group";
         user: "user";
         role: "role";
+        location: "location";
+        division: "division";
+        department: "department";
     }>;
     principalId: z.ZodString;
 }, z.core.$strip>;
