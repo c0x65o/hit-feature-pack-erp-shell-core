@@ -1004,11 +1004,12 @@ function ShellContent({
   }, [themePreference, applyThemePreference]);
 
   useEffect(() => {
-    // Map profile_picture_url to avatar if present (user prop might have either field)
-    const mappedUser = user ? {
-      ...user,
-      avatar: (user as any).profile_picture_url || user.avatar || undefined,
-    } : null;
+    const mappedUser = user
+      ? {
+          ...user,
+          avatar: user.avatar || undefined,
+        }
+      : null;
     setCurrentUser(mappedUser);
     // Identity: email is the stable identifier; display name may be enriched via HRM (employees) when installed.
     setProfileLoaded(false);
@@ -1083,67 +1084,30 @@ function ShellContent({
     return String(currentUser?.email || 'User');
   }, [hrmEmployee, profileFields, currentUser?.name, currentUser?.email]);
 
-  // Fetch profile picture on initial load if missing
+  const canEditPhoto = hrmEnabled && Boolean((hrmEmployee as any)?.id);
+  const photoHelperText = !hrmEnabled
+    ? 'Profile photos are managed in HRM. Install HRM to enable uploads.'
+    : !hrmEmployee
+      ? 'Loading employee profile...'
+      : null;
+  const photoControlsDisabled = uploadingPicture || !canEditPhoto;
+
+  // Fetch profile picture on initial load if missing (HRM-only)
   useEffect(() => {
     if (!currentUser?.email || currentUser?.avatar) {
       return; // Skip if no user or avatar already exists
     }
 
-    // If HRM is installed, employee owns the photo; don't fetch from auth.
-    if (hrmEnabled) {
-      const hrmPhoto =
-        String((hrmEmployee as any)?.profilePictureUrl || (hrmEmployee as any)?.profile_picture_url || '').trim() ||
-        null;
-      if (hrmPhoto) {
-        setCurrentUser((prev) => {
-          if (!prev || prev.email !== currentUser.email || prev.avatar) return prev;
-          return { ...prev, avatar: hrmPhoto };
-        });
-      }
-      return;
+    const hrmPhoto =
+      String((hrmEmployee as any)?.profilePictureUrl || (hrmEmployee as any)?.profile_picture_url || '').trim() ||
+      null;
+    if (hrmPhoto) {
+      setCurrentUser((prev) => {
+        if (!prev || prev.email !== currentUser.email || prev.avatar) return prev;
+        return { ...prev, avatar: hrmPhoto };
+      });
     }
-
-    const email = currentUser.email;
-    let cancelled = false;
-
-    const fetchProfilePicture = async () => {
-      try {
-        const token = getStoredToken();
-        if (!token || cancelled) return;
-
-        const response = await fetch(`/api/auth/users/${encodeURIComponent(email)}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-
-        if (cancelled) return;
-
-        if (response.ok) {
-          const userData = await response.json();
-          const profilePictureUrl = userData.profile_picture_url;
-          if (profilePictureUrl && !cancelled) {
-            setCurrentUser((prev) => {
-              if (!prev || prev.email !== email || prev.avatar) return prev;
-              return {
-                ...prev,
-                avatar: profilePictureUrl,
-              };
-            });
-          }
-        }
-      } catch (err) {
-        // Silently fail - avatar is optional
-      }
-    };
-
-    fetchProfilePicture();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.email, currentUser?.avatar, hrmEnabled, hrmEmployee]); // Only run when email changes (and HRM status)
+  }, [currentUser?.email, currentUser?.avatar, hrmEmployee]); // Only run when email changes (and HRM status)
 
   // Listen for user profile updates (e.g., after picture upload)
   useEffect(() => {
@@ -1161,36 +1125,12 @@ function ShellContent({
         return;
       }
 
-      // Fetch updated user data from auth API
-      try {
-        const token = getStoredToken();
-        if (!token) return;
-
-        const response = await fetch(`/api/auth/users/${encodeURIComponent(currentUser.email || '')}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          // Map profile_picture_url to avatar
-          setCurrentUser({
-            ...currentUser,
-            avatar: userData.profile_picture_url || undefined,
-          });
-        }
-      } catch (err) {
-        // If fetch fails, fall back to using the event data
-        const updatedProfilePictureUrl = detail?.profile_picture_url;
-        if (updatedProfilePictureUrl !== undefined) {
-          setCurrentUser({
-            ...currentUser,
-            avatar: updatedProfilePictureUrl || undefined,
-          });
-        }
+      const updatedProfilePictureUrl = detail?.profile_picture_url;
+      if (updatedProfilePictureUrl !== undefined) {
+        const nextUrl = updatedProfilePictureUrl || null;
+        setProfilePictureUrl(nextUrl);
+        setCurrentUser((prev) => (prev ? { ...prev, avatar: nextUrl || undefined } : prev));
+        setHrmEmployee((prev: any) => (prev ? { ...prev, profilePictureUrl: nextUrl } : prev));
       }
     };
 
@@ -1705,15 +1645,6 @@ function ShellContent({
       }
       setProfileMetadata(data.metadata || {});
       setProfileFields(data.profile_fields || {});
-      setProfilePictureUrl(data.profile_picture_url || null);
-      
-      // Update currentUser avatar if profile picture is available
-      if (data.profile_picture_url) {
-        setCurrentUser((prev) => prev ? {
-          ...prev,
-          avatar: data.profile_picture_url || undefined,
-        } : null);
-      }
       
       // Fetch profile field metadata (including email)
       try {
@@ -1956,14 +1887,17 @@ function ShellContent({
         throw new Error('You must be signed in to update your profile.');
       }
 
+      if (!hrmEnabled) {
+        throw new Error('Profile photos are managed in HRM. Install HRM to update your picture.');
+      }
+
       const employeeId = String((hrmEmployee as any)?.id || '').trim();
-      const useHrm = hrmEnabled && employeeId;
-      if (hrmEnabled && !employeeId) {
+      if (!employeeId) {
         throw new Error('Employee record not loaded yet. Please try again in a moment.');
       }
 
-      // HRM owns the employee photo; fall back to auth only when HRM is not installed.
-      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/auth/me`, {
+      // HRM owns the employee photo.
+      const response = await fetch(`/api/hrm/employees/${encodeURIComponent(employeeId)}/photo`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2025,14 +1959,17 @@ function ShellContent({
         throw new Error('You must be signed in to update your profile.');
       }
 
+      if (!hrmEnabled) {
+        throw new Error('Profile photos are managed in HRM. Install HRM to update your picture.');
+      }
+
       const employeeId = String((hrmEmployee as any)?.id || '').trim();
-      const useHrm = hrmEnabled && employeeId;
-      if (hrmEnabled && !employeeId) {
+      if (!employeeId) {
         throw new Error('Employee record not loaded yet. Please try again in a moment.');
       }
 
-      // HRM owns the employee photo; fall back to auth only when HRM is not installed.
-      const response = await fetch(useHrm ? `/api/hrm/employees/${encodeURIComponent(employeeId)}/photo` : `/api/auth/me`, {
+      // HRM owns the employee photo.
+      const response = await fetch(`/api/hrm/employees/${encodeURIComponent(employeeId)}/photo`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -3202,7 +3139,7 @@ function ShellContent({
                       <div style={styles({ display: 'flex', gap: spacing.sm })}>
                         <button
                           onClick={triggerFileInput}
-                          disabled={uploadingPicture}
+                          disabled={photoControlsDisabled}
                           style={styles({
                             display: 'flex',
                             alignItems: 'center',
@@ -3213,8 +3150,10 @@ function ShellContent({
                             backgroundColor: colors.bg.page,
                             color: colors.text.primary,
                             fontSize: ts.bodySmall.fontSize,
-                            cursor: uploadingPicture ? 'wait' : 'pointer',
-                            opacity: uploadingPicture ? 0.6 : 1,
+                            cursor: photoControlsDisabled
+                              ? (uploadingPicture ? 'wait' : 'not-allowed')
+                              : 'pointer',
+                            opacity: photoControlsDisabled ? 0.6 : 1,
                           })}
                         >
                           <Camera size={14} />
@@ -3223,7 +3162,7 @@ function ShellContent({
                         {profilePictureUrl && (
                           <button
                             onClick={handlePictureDelete}
-                            disabled={uploadingPicture}
+                            disabled={photoControlsDisabled}
                             style={styles({
                               display: 'flex',
                               alignItems: 'center',
@@ -3234,8 +3173,10 @@ function ShellContent({
                               backgroundColor: colors.bg.page,
                               color: colors.error.default,
                               fontSize: ts.bodySmall.fontSize,
-                              cursor: uploadingPicture ? 'wait' : 'pointer',
-                              opacity: uploadingPicture ? 0.6 : 1,
+                              cursor: photoControlsDisabled
+                                ? (uploadingPicture ? 'wait' : 'not-allowed')
+                                : 'pointer',
+                              opacity: photoControlsDisabled ? 0.6 : 1,
                             })}
                           >
                             <Trash2 size={14} />
@@ -3243,6 +3184,11 @@ function ShellContent({
                           </button>
                         )}
                       </div>
+                      {photoHelperText && (
+                        <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                          {photoHelperText}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <input
