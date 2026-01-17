@@ -13,6 +13,8 @@ export type StaticTableViewSpec = {
     columnVisibility?: any;
     sorting?: any;
     groupBy?: any;
+    columnOrder?: string[] | null;
+    mobileColumns?: string[] | null;
     metadata?: any;
     filters?: StaticTableViewFilterSpec[];
 };
@@ -27,6 +29,8 @@ export declare function getStaticViewsForTable(tableId: string): Array<{
     columnVisibility: any;
     sorting: any;
     groupBy: any;
+    columnOrder: string[] | null;
+    mobileColumns: string[] | null;
     description: string | null;
     metadata: any;
     createdAt: Date;
@@ -54,6 +58,8 @@ export declare function getStaticViewById(viewId: string): {
     columnVisibility: any;
     sorting: any;
     groupBy: any;
+    columnOrder: string[] | null;
+    mobileColumns: string[] | null;
     description: string | null;
     metadata: any;
     createdAt: Date;

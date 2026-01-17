@@ -29,6 +29,8 @@ export type StaticTableViewSpec = {
   columnVisibility?: any;
   sorting?: any;
   groupBy?: any;
+  columnOrder?: string[] | null;
+  mobileColumns?: string[] | null;
   metadata?: any;
   filters?: StaticTableViewFilterSpec[];
 };
@@ -44,6 +46,9 @@ function normalizeStaticView(tableId: string, v: AnyRecord): StaticTableViewSpec
   const name = String(v?.name || '').trim();
   if (!id || !name) return null;
   const description = v?.description === undefined ? null : (v?.description ?? null);
+  // Parse columnOrder and mobileColumns as string arrays
+  const columnOrder = Array.isArray(v?.columnOrder) ? v.columnOrder.map((c: unknown) => String(c)) : null;
+  const mobileColumns = Array.isArray(v?.mobileColumns) ? v.mobileColumns.map((c: unknown) => String(c)) : null;
   return {
     id,
     name,
@@ -52,6 +57,8 @@ function normalizeStaticView(tableId: string, v: AnyRecord): StaticTableViewSpec
     columnVisibility: v?.columnVisibility ?? null,
     sorting: v?.sorting ?? null,
     groupBy: v?.groupBy ?? null,
+    columnOrder,
+    mobileColumns,
     metadata: (v?.metadata && typeof v?.metadata === 'object') ? v?.metadata : null,
     filters: Array.isArray(v?.filters) ? v.filters : undefined,
   };
@@ -69,6 +76,8 @@ export function getStaticViewsForTable(tableId: string): Array<
     columnVisibility: any;
     sorting: any;
     groupBy: any;
+    columnOrder: string[] | null;
+    mobileColumns: string[] | null;
     description: string | null;
     metadata: any;
     createdAt: Date;
@@ -123,6 +132,8 @@ export function getStaticViewsForTable(tableId: string): Array<
       columnVisibility: spec.columnVisibility ?? null,
       sorting: spec.sorting ?? null,
       groupBy: spec.groupBy ?? null,
+      columnOrder: spec.columnOrder ?? null,
+      mobileColumns: spec.mobileColumns ?? null,
       metadata: spec.metadata ?? null,
       createdAt: now,
       updatedAt: now,

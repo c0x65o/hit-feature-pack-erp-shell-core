@@ -599,8 +599,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         confirmPassword: '',
     });
     const [profileMetadata, setProfileMetadata] = useState({});
-    const [profileFields, setProfileFields] = useState({});
-    const [profileFieldMetadata, setProfileFieldMetadata] = useState([]);
     const [profileStatus, setProfileStatus] = useState({
         saving: false,
         error: null,
@@ -838,16 +836,11 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         const fromHrm = hrmEmployee ? employeeDisplayName(hrmEmployee) : '';
         if (fromHrm)
             return fromHrm;
-        const pfFirst = String(profileFields?.first_name || '').trim();
-        const pfLast = String(profileFields?.last_name || '').trim();
-        const fromProfileFields = [pfFirst, pfLast].filter(Boolean).join(' ').trim();
-        if (fromProfileFields)
-            return fromProfileFields;
         const fromJwt = String(currentUser?.name || '').trim();
         if (fromJwt)
             return fromJwt;
         return String(currentUser?.email || 'User');
-    }, [hrmEmployee, profileFields, currentUser?.name, currentUser?.email]);
+    }, [hrmEmployee, currentUser?.name, currentUser?.email]);
     const canEditPhoto = hrmEnabled && Boolean(hrmEmployee?.id);
     const photoHelperText = !hrmEnabled
         ? 'Profile photos are managed in HRM. Install HRM to enable uploads.'
@@ -1381,23 +1374,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 throw new Error(data?.detail || data?.error || 'Unable to load profile');
             }
             setProfileMetadata(data.metadata || {});
-            setProfileFields(data.profile_fields || {});
-            // Fetch profile field metadata (including email)
-            try {
-                const fieldsResponse = await fetch(`/api/auth/me/profile-fields`, {
-                    headers,
-                    credentials: 'include',
-                });
-                if (fieldsResponse.ok) {
-                    const fieldsData = await fieldsResponse.json().catch(() => []);
-                    // Defensive: endpoint may return an error object (or null), but UI expects an array.
-                    setProfileFieldMetadata(Array.isArray(fieldsData) ? fieldsData : []);
-                }
-            }
-            catch (fieldsError) {
-                // Silently fail if profile fields feature is not enabled
-                console.debug('Profile fields not available:', fieldsError);
-            }
             setProfileLoaded(true);
             // If HRM is enabled, also load employee profile for editing in the modal.
             if (hrmEnabled) {
@@ -1500,27 +1476,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
             if (profileForm.password) {
                 payload.password = profileForm.password;
             }
-            // Build profile_fields payload - include all required fields and any modified fields
-            const nextProfileFields = { ...profileFields };
-            // Ensure all required fields are included (even if disabled/uneditable)
-            // This prevents backend validation errors for required fields like email
-            for (const fieldMeta of profileFieldMetadata) {
-                if (fieldMeta.required && !(fieldMeta.field_key in nextProfileFields)) {
-                    // For email, get it from currentUser
-                    if (fieldMeta.field_key === 'email' && currentUser?.email) {
-                        nextProfileFields[fieldMeta.field_key] = currentUser.email;
-                    }
-                    // For other required fields, check if they exist in the fetched profile_fields
-                    // (they should have been loaded in fetchProfile, but include them to be safe)
-                    else if (profileFields[fieldMeta.field_key] !== undefined) {
-                        nextProfileFields[fieldMeta.field_key] = profileFields[fieldMeta.field_key];
-                    }
-                }
-            }
-            // Include profile_fields if there are any fields to send
-            if (Object.keys(nextProfileFields).length > 0) {
-                payload.profile_fields = nextProfileFields;
-            }
             const response = await fetch(`/api/auth/me`, {
                 method: 'PUT',
                 headers: {
@@ -1534,7 +1489,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                 throw new Error(data?.detail || data?.error || 'Failed to update profile');
             }
             setProfileMetadata(data.metadata || profileMetadata);
-            setProfileFields(data.profile_fields || profileFields);
             // Note: email is used as the identifier, not a separate name field
             setProfileStatus({ saving: false, error: null, success: 'Profile updated successfully.' });
             setProfileForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
@@ -1552,8 +1506,6 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         profileForm.confirmPassword,
         profileForm.password,
         profileMetadata,
-        profileFields,
-        profileFieldMetadata,
         hrmEnabled,
         hrmForm.firstName,
         hrmForm.lastName,
@@ -2337,40 +2289,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
                                                                         backgroundColor: colors.bg.page,
                                                                         color: colors.text.primary,
                                                                         fontSize: ts.body.fontSize,
-                                                                    }) })] })] })] })), [...profileFieldMetadata]
-                                            .sort((a, b) => a.display_order - b.display_order)
-                                            .map((fieldMeta) => {
-                                            const isAdmin = (currentUser?.roles || []).map((r) => String(r || '').toLowerCase()).includes('admin');
-                                            const canEdit = isAdmin || fieldMeta.user_can_edit;
-                                            // Email comes from currentUser.email, other fields from profileFields
-                                            const fieldValue = fieldMeta.field_key === 'email'
-                                                ? (currentUser?.email || '')
-                                                : (profileFields[fieldMeta.field_key] || '');
-                                            return (_jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsxs("span", { style: styles({ color: colors.text.secondary }), children: [fieldMeta.field_label, fieldMeta.required && _jsx("span", { style: styles({ color: colors.error.default }), children: " *" })] }), _jsx("input", { type: fieldMeta.field_type === 'int' ? 'number' : fieldMeta.field_key === 'email' ? 'email' : 'text', value: fieldValue, onChange: (e) => {
-                                                            if (fieldMeta.field_key === 'email') {
-                                                                // Email typically cannot be edited, but handle it if needed
-                                                                return;
-                                                            }
-                                                            const newValue = fieldMeta.field_type === 'int'
-                                                                ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
-                                                                : e.target.value;
-                                                            setProfileFields((prev) => ({
-                                                                ...prev,
-                                                                [fieldMeta.field_key]: newValue,
-                                                            }));
-                                                        }, placeholder: fieldMeta.required ? 'Required' : 'Optional', disabled: !canEdit || fieldMeta.field_key === 'email', required: fieldMeta.required, style: styles({
-                                                            padding: `${spacing.sm} ${spacing.md}`,
-                                                            borderRadius: radius.md,
-                                                            border: `1px solid ${colors.border.default}`,
-                                                            backgroundColor: (canEdit && fieldMeta.field_key !== 'email') ? colors.bg.page : colors.bg.muted,
-                                                            color: colors.text.primary,
-                                                            fontSize: ts.body.fontSize,
-                                                            opacity: (canEdit && fieldMeta.field_key !== 'email') ? 1 : 0.6,
-                                                            cursor: (canEdit && fieldMeta.field_key !== 'email') ? 'text' : 'not-allowed',
-                                                        }) }), (!canEdit || fieldMeta.field_key === 'email') && (_jsx("span", { style: styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted }), children: fieldMeta.field_key === 'email'
-                                                            ? 'Email cannot be changed'
-                                                            : 'This field can only be edited by administrators' }))] }, fieldMeta.field_key));
-                                        }), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "New password" }), _jsx("input", { type: "password", value: profileForm.password, onChange: (e) => setProfileForm((prev) => ({ ...prev, password: e.target.value })), placeholder: "Optional", style: styles({
+                                                                    }) })] })] })] })), _jsxs("label", { style: styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize }), children: [_jsx("span", { style: styles({ color: colors.text.secondary }), children: "New password" }), _jsx("input", { type: "password", value: profileForm.password, onChange: (e) => setProfileForm((prev) => ({ ...prev, password: e.target.value })), placeholder: "Optional", style: styles({
                                                         padding: `${spacing.sm} ${spacing.md}`,
                                                         borderRadius: radius.md,
                                                         border: `1px solid ${colors.border.default}`,

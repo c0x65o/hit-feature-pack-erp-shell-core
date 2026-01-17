@@ -199,6 +199,40 @@ export declare const tableViews: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        columnOrder: import("drizzle-orm/pg-core").PgColumn<{
+            name: "column_order";
+            tableName: "table_views";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        mobileColumns: import("drizzle-orm/pg-core").PgColumn<{
+            name: "mobile_columns";
+            tableName: "table_views";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         description: import("drizzle-orm/pg-core").PgColumn<{
             name: "description";
             tableName: "table_views";

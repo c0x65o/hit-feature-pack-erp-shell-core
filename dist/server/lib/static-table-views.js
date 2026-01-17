@@ -23,6 +23,9 @@ function normalizeStaticView(tableId, v) {
     if (!id || !name)
         return null;
     const description = v?.description === undefined ? null : (v?.description ?? null);
+    // Parse columnOrder and mobileColumns as string arrays
+    const columnOrder = Array.isArray(v?.columnOrder) ? v.columnOrder.map((c) => String(c)) : null;
+    const mobileColumns = Array.isArray(v?.mobileColumns) ? v.mobileColumns.map((c) => String(c)) : null;
     return {
         id,
         name,
@@ -31,6 +34,8 @@ function normalizeStaticView(tableId, v) {
         columnVisibility: v?.columnVisibility ?? null,
         sorting: v?.sorting ?? null,
         groupBy: v?.groupBy ?? null,
+        columnOrder,
+        mobileColumns,
         metadata: (v?.metadata && typeof v?.metadata === 'object') ? v?.metadata : null,
         filters: Array.isArray(v?.filters) ? v.filters : undefined,
     };
@@ -74,6 +79,8 @@ export function getStaticViewsForTable(tableId) {
             columnVisibility: spec.columnVisibility ?? null,
             sorting: spec.sorting ?? null,
             groupBy: spec.groupBy ?? null,
+            columnOrder: spec.columnOrder ?? null,
+            mobileColumns: spec.mobileColumns ?? null,
             metadata: spec.metadata ?? null,
             createdAt: now,
             updatedAt: now,

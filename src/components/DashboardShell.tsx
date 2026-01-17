@@ -828,15 +828,6 @@ function ShellContent({
     confirmPassword: '',
   });
   const [profileMetadata, setProfileMetadata] = useState<Record<string, any>>({});
-  const [profileFields, setProfileFields] = useState<Record<string, any>>({});
-  const [profileFieldMetadata, setProfileFieldMetadata] = useState<Array<{
-    field_key: string;
-    field_label: string;
-    field_type: string;
-    required: boolean;
-    user_can_edit: boolean;
-    display_order: number;
-  }>>([]);
   const [profileStatus, setProfileStatus] = useState<{ saving: boolean; error: string | null; success: string | null }>({
     saving: false,
     error: null,
@@ -1075,14 +1066,10 @@ function ShellContent({
   const userDisplayName = React.useMemo(() => {
     const fromHrm = hrmEmployee ? employeeDisplayName(hrmEmployee) : '';
     if (fromHrm) return fromHrm;
-    const pfFirst = String((profileFields as any)?.first_name || '').trim();
-    const pfLast = String((profileFields as any)?.last_name || '').trim();
-    const fromProfileFields = [pfFirst, pfLast].filter(Boolean).join(' ').trim();
-    if (fromProfileFields) return fromProfileFields;
     const fromJwt = String((currentUser as any)?.name || '').trim();
     if (fromJwt) return fromJwt;
     return String(currentUser?.email || 'User');
-  }, [hrmEmployee, profileFields, currentUser?.name, currentUser?.email]);
+  }, [hrmEmployee, currentUser?.name, currentUser?.email]);
 
   const canEditPhoto = hrmEnabled && Boolean((hrmEmployee as any)?.id);
   const photoHelperText = !hrmEnabled
@@ -1644,24 +1631,6 @@ function ShellContent({
         throw new Error(data?.detail || data?.error || 'Unable to load profile');
       }
       setProfileMetadata(data.metadata || {});
-      setProfileFields(data.profile_fields || {});
-      
-      // Fetch profile field metadata (including email)
-      try {
-        const fieldsResponse = await fetch(`/api/auth/me/profile-fields`, {
-          headers,
-          credentials: 'include',
-        });
-        if (fieldsResponse.ok) {
-          const fieldsData = await fieldsResponse.json().catch(() => []);
-          // Defensive: endpoint may return an error object (or null), but UI expects an array.
-          setProfileFieldMetadata(Array.isArray(fieldsData) ? fieldsData : []);
-        }
-      } catch (fieldsError) {
-        // Silently fail if profile fields feature is not enabled
-        console.debug('Profile fields not available:', fieldsError);
-      }
-      
       setProfileLoaded(true);
 
       // If HRM is enabled, also load employee profile for editing in the modal.
@@ -1768,30 +1737,6 @@ function ShellContent({
       if (profileForm.password) {
         payload.password = profileForm.password;
       }
-      
-      // Build profile_fields payload - include all required fields and any modified fields
-      const nextProfileFields: Record<string, any> = { ...profileFields };
-      
-      // Ensure all required fields are included (even if disabled/uneditable)
-      // This prevents backend validation errors for required fields like email
-      for (const fieldMeta of profileFieldMetadata) {
-        if (fieldMeta.required && !(fieldMeta.field_key in nextProfileFields)) {
-          // For email, get it from currentUser
-          if (fieldMeta.field_key === 'email' && currentUser?.email) {
-            nextProfileFields[fieldMeta.field_key] = currentUser.email;
-          }
-          // For other required fields, check if they exist in the fetched profile_fields
-          // (they should have been loaded in fetchProfile, but include them to be safe)
-          else if (profileFields[fieldMeta.field_key] !== undefined) {
-            nextProfileFields[fieldMeta.field_key] = profileFields[fieldMeta.field_key];
-          }
-        }
-      }
-      
-      // Include profile_fields if there are any fields to send
-      if (Object.keys(nextProfileFields).length > 0) {
-        payload.profile_fields = nextProfileFields;
-      }
 
       const response = await fetch(`/api/auth/me`, {
         method: 'PUT',
@@ -1807,7 +1752,6 @@ function ShellContent({
       }
 
       setProfileMetadata(data.metadata || profileMetadata);
-      setProfileFields(data.profile_fields || profileFields);
       // Note: email is used as the identifier, not a separate name field
       setProfileStatus({ saving: false, error: null, success: 'Profile updated successfully.' });
       setProfileForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
@@ -1824,8 +1768,6 @@ function ShellContent({
     profileForm.confirmPassword,
     profileForm.password,
     profileMetadata,
-    profileFields,
-    profileFieldMetadata,
     hrmEnabled,
     hrmForm.firstName,
     hrmForm.lastName,
@@ -3266,68 +3208,6 @@ function ShellContent({
                     </div>
                   </div>
                 )}
-
-                {/* Profile Fields - Integrated (including email) */}
-                {[...profileFieldMetadata]
-                  .sort((a, b) => a.display_order - b.display_order)
-                  .map((fieldMeta) => {
-                    const isAdmin =
-                      (currentUser?.roles || []).map((r) => String(r || '').toLowerCase()).includes('admin');
-                    const canEdit = isAdmin || fieldMeta.user_can_edit;
-                    // Email comes from currentUser.email, other fields from profileFields
-                    const fieldValue = fieldMeta.field_key === 'email' 
-                      ? (currentUser?.email || '')
-                      : (profileFields[fieldMeta.field_key] || '');
-                    
-                    return (
-                      <label
-                        key={fieldMeta.field_key}
-                        style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}
-                      >
-                        <span style={styles({ color: colors.text.secondary })}>
-                          {fieldMeta.field_label}
-                          {fieldMeta.required && <span style={styles({ color: colors.error.default })}> *</span>}
-                        </span>
-                        <input
-                          type={fieldMeta.field_type === 'int' ? 'number' : fieldMeta.field_key === 'email' ? 'email' : 'text'}
-                          value={fieldValue}
-                          onChange={(e) => {
-                            if (fieldMeta.field_key === 'email') {
-                              // Email typically cannot be edited, but handle it if needed
-                              return;
-                            }
-                            const newValue = fieldMeta.field_type === 'int' 
-                              ? (e.target.value === '' ? '' : parseInt(e.target.value, 10))
-                              : e.target.value;
-                            setProfileFields((prev) => ({
-                              ...prev,
-                              [fieldMeta.field_key]: newValue,
-                            }));
-                          }}
-                          placeholder={fieldMeta.required ? 'Required' : 'Optional'}
-                          disabled={!canEdit || fieldMeta.field_key === 'email'}
-                          required={fieldMeta.required}
-                          style={styles({
-                            padding: `${spacing.sm} ${spacing.md}`,
-                            borderRadius: radius.md,
-                            border: `1px solid ${colors.border.default}`,
-                            backgroundColor: (canEdit && fieldMeta.field_key !== 'email') ? colors.bg.page : colors.bg.muted,
-                            color: colors.text.primary,
-                            fontSize: ts.body.fontSize,
-                            opacity: (canEdit && fieldMeta.field_key !== 'email') ? 1 : 0.6,
-                            cursor: (canEdit && fieldMeta.field_key !== 'email') ? 'text' : 'not-allowed',
-                          })}
-                        />
-                        {(!canEdit || fieldMeta.field_key === 'email') && (
-                          <span style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
-                            {fieldMeta.field_key === 'email' 
-                              ? 'Email cannot be changed'
-                              : 'This field can only be edited by administrators'}
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
 
                 {/* Password fields */}
                 <label style={styles({ display: 'flex', flexDirection: 'column', gap: spacing.xs, fontSize: ts.bodySmall.fontSize })}>

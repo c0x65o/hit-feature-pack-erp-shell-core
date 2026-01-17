@@ -85,7 +85,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const body = await request.json();
-    const { name, description, filters, columnVisibility, sorting, groupBy, isDefault, metadata } = body;
+    const { name, description, filters, columnVisibility, sorting, groupBy, columnOrder, mobileColumns, isDefault, metadata } = body;
 
     // Get view by ID first (not filtering by user)
     const [existingView] = await db
@@ -116,6 +116,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         columnVisibility: columnVisibility !== undefined ? columnVisibility : existingView.columnVisibility,
         sorting: sorting !== undefined ? sorting : existingView.sorting,
         groupBy: groupBy !== undefined ? groupBy : existingView.groupBy,
+        columnOrder: columnOrder !== undefined ? (Array.isArray(columnOrder) ? columnOrder : null) : existingView.columnOrder,
+        mobileColumns: mobileColumns !== undefined ? (Array.isArray(mobileColumns) ? mobileColumns : null) : existingView.mobileColumns,
         isDefault: isDefault !== undefined ? isDefault : existingView.isDefault,
         metadata: metadata !== undefined ? (metadata && typeof metadata === 'object' ? metadata : null) : existingView.metadata,
         updatedAt: new Date(),
