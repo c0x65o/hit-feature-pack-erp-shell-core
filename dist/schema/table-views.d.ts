@@ -14,7 +14,7 @@ import { type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
  * Principal Types for ACL
  * Shared enum used across all feature packs (forms, vault, notepad, etc.)
  */
-export declare const principalTypeEnum: import("drizzle-orm/pg-core").PgEnum<["user", "group", "role"]>;
+export declare const principalTypeEnum: import("drizzle-orm/pg-core").PgEnum<["user", "group", "role", "location", "division", "department"]>;
 /**
  * Table Views Table
  * Stores user-defined views for data tables (e.g., "projects", "crm.companies")
@@ -488,14 +488,14 @@ export declare const tableViewShares: import("drizzle-orm/pg-core").PgTableWithC
             tableName: "table_view_shares";
             dataType: "string";
             columnType: "PgEnumColumn";
-            data: "group" | "user" | "role";
+            data: "group" | "user" | "role" | "location" | "division" | "department";
             driverParam: string;
             notNull: true;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
-            enumValues: ["user", "group", "role"];
+            enumValues: ["user", "group", "role", "location", "division", "department"];
             baseColumn: never;
             identity: undefined;
             generated: undefined;
