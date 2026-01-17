@@ -1021,14 +1021,14 @@ function ShellContent({
     const fetchEmployee = async () => {
       try {
         const token = getStoredToken();
-        if (!token) return;
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch('/api/hrm/employees/me', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
           credentials: 'include',
         });
         if (cancelled) return;
         if (res.status === 404) {
-          setHrmEnabled(false);
+          setHrmEmployee(null);
           return;
         }
         if (!res.ok) return;
