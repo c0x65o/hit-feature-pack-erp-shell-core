@@ -837,6 +837,8 @@ function ShellContent({
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
   const [hrmEnabled, setHrmEnabled] = useState<boolean>(() => Boolean((hitConfig as any)?.featurePacks?.hrm));
   const [hrmEmployee, setHrmEmployee] = useState<any | null>(null);
+  const [canEditEmployeeName, setCanEditEmployeeName] = useState<boolean>(false);
+  const [employeeNamePermissionLoaded, setEmployeeNamePermissionLoaded] = useState<boolean>(false);
   const [hrmForm, setHrmForm] = useState<{ firstName: string; lastName: string; preferredName: string }>({
     firstName: '',
     lastName: '',
@@ -1015,6 +1017,47 @@ function ShellContent({
   }, [hitConfig]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!hrmEnabled || !currentUser?.email) {
+      setCanEditEmployeeName(false);
+      setEmployeeNamePermissionLoaded(false);
+      return;
+    }
+    setEmployeeNamePermissionLoaded(false);
+    const checkPermission = async () => {
+      try {
+        const token = getStoredToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(
+          `/api/auth/permissions/actions/check/${encodeURIComponent('hrm.employees.name.self')}`,
+          {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          }
+        );
+        const data = await res.json().catch(() => ({}));
+        const allowed = Boolean(
+          data?.has_permission ?? data?.hasPermission ?? data?.allowed ?? data?.ok ?? false
+        );
+        if (!cancelled) {
+          setCanEditEmployeeName(allowed);
+          setEmployeeNamePermissionLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setCanEditEmployeeName(false);
+          setEmployeeNamePermissionLoaded(true);
+        }
+      }
+    };
+    checkPermission();
+    return () => {
+      cancelled = true;
+    };
+  }, [hrmEnabled, currentUser?.email]);
+
+  useEffect(() => {
     if (!hrmEnabled) return;
     if (!currentUser?.email) return;
     let cancelled = false;
@@ -1080,6 +1123,10 @@ function ShellContent({
         ? 'Loading employee profile...'
         : null;
   const photoControlsDisabled = uploadingPicture || !canEditPhoto;
+  const nameHelperText =
+    hrmEnabled && employeeNamePermissionLoaded && !canEditEmployeeName
+      ? 'Name changes are managed by HRM admins.'
+      : null;
 
   // Fetch profile picture on initial load if missing (HRM-only)
   useEffect(() => {
@@ -1693,24 +1740,35 @@ function ShellContent({
     setProfileStatus({ saving: true, error: null, success: null });
     try {
       const token = getStoredToken();
-      if (!token) {
-        throw new Error('You must be signed in to update your profile.');
+      const authHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        authHeaders.Authorization = `Bearer ${token}`;
       }
 
+      let didUpdate = false;
+
       // HRM employee profile (optional). Save first so displayName updates immediately.
-      if (hrmEnabled) {
+      if (hrmEnabled && canEditEmployeeName) {
         const firstName = String(hrmForm.firstName || '').trim();
         const lastName = String(hrmForm.lastName || '').trim();
         const preferredName = String(hrmForm.preferredName || '').trim();
+        const currentFirst = String(hrmEmployee?.firstName || hrmEmployee?.first_name || '').trim();
+        const currentLast = String(hrmEmployee?.lastName || hrmEmployee?.last_name || '').trim();
+        const currentPreferred = String(
+          hrmEmployee?.preferredName || hrmEmployee?.preferred_name || ''
+        ).trim();
+        const nameChanged =
+          firstName !== currentFirst ||
+          lastName !== currentLast ||
+          preferredName !== currentPreferred;
 
         // Only attempt save if the user filled anything in (avoid forcing HRM in existing installs).
-        if (firstName || lastName || preferredName) {
+        if (nameChanged && (firstName || lastName || preferredName)) {
           const hrmRes = await fetch('/api/hrm/employees/me', {
             method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
+            headers: authHeaders,
             credentials: 'include',
             body: JSON.stringify({
               firstName,
@@ -1719,7 +1777,7 @@ function ShellContent({
             }),
           });
           if (hrmRes.status === 404) {
-            setHrmEnabled(false);
+            setHrmEmployee(null);
           } else if (!hrmRes.ok) {
             const hrmJson = await hrmRes.json().catch(() => ({}));
             throw new Error(hrmJson?.error || hrmJson?.detail || 'Failed to update employee profile');
@@ -1727,6 +1785,7 @@ function ShellContent({
             const hrmJson = await hrmRes.json().catch(() => ({}));
             const employee = (hrmJson as any)?.employee || null;
             setHrmEmployee(employee);
+            didUpdate = true;
           }
         }
       }
@@ -1739,23 +1798,26 @@ function ShellContent({
       if (profileForm.password) {
         payload.password = profileForm.password;
       }
-
-      const response = await fetch(`/api/auth/me`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.detail || data?.error || 'Failed to update profile');
+      if (Object.keys(payload).length > 0) {
+        const response = await fetch(`/api/auth/me`, {
+          method: 'PUT',
+          headers: authHeaders,
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.detail || data?.error || 'Failed to update profile');
+        }
+        setProfileMetadata(data.metadata || profileMetadata);
+        didUpdate = true;
       }
-
-      setProfileMetadata(data.metadata || profileMetadata);
       // Note: email is used as the identifier, not a separate name field
-      setProfileStatus({ saving: false, error: null, success: 'Profile updated successfully.' });
+      setProfileStatus({
+        saving: false,
+        error: null,
+        success: didUpdate ? 'Profile updated successfully.' : 'No changes to save.',
+      });
       setProfileForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
       setProfileLoaded(true);
     } catch (error) {
@@ -1771,9 +1833,16 @@ function ShellContent({
     profileForm.password,
     profileMetadata,
     hrmEnabled,
+    canEditEmployeeName,
     hrmForm.firstName,
     hrmForm.lastName,
     hrmForm.preferredName,
+    hrmEmployee?.firstName,
+    hrmEmployee?.first_name,
+    hrmEmployee?.lastName,
+    hrmEmployee?.last_name,
+    hrmEmployee?.preferredName,
+    hrmEmployee?.preferred_name,
   ]);
 
   const handlePictureUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -3161,13 +3230,16 @@ function ShellContent({
                         value={hrmForm.preferredName}
                         onChange={(e) => setHrmForm((prev) => ({ ...prev, preferredName: e.target.value }))}
                         placeholder="Optional"
+                        disabled={!canEditEmployeeName}
                         style={styles({
                           padding: `${spacing.sm} ${spacing.md}`,
                           borderRadius: radius.md,
                           border: `1px solid ${colors.border.default}`,
-                          backgroundColor: colors.bg.page,
+                          backgroundColor: canEditEmployeeName ? colors.bg.page : colors.bg.muted,
                           color: colors.text.primary,
                           fontSize: ts.body.fontSize,
+                          opacity: canEditEmployeeName ? 1 : 0.6,
+                          cursor: canEditEmployeeName ? 'text' : 'not-allowed',
                         })}
                       />
                     </label>
@@ -3180,13 +3252,16 @@ function ShellContent({
                           value={hrmForm.firstName}
                           onChange={(e) => setHrmForm((prev) => ({ ...prev, firstName: e.target.value }))}
                           placeholder="Required"
+                          disabled={!canEditEmployeeName}
                           style={styles({
                             padding: `${spacing.sm} ${spacing.md}`,
                             borderRadius: radius.md,
                             border: `1px solid ${colors.border.default}`,
-                            backgroundColor: colors.bg.page,
+                            backgroundColor: canEditEmployeeName ? colors.bg.page : colors.bg.muted,
                             color: colors.text.primary,
                             fontSize: ts.body.fontSize,
+                            opacity: canEditEmployeeName ? 1 : 0.6,
+                            cursor: canEditEmployeeName ? 'text' : 'not-allowed',
                           })}
                         />
                       </label>
@@ -3197,17 +3272,25 @@ function ShellContent({
                           value={hrmForm.lastName}
                           onChange={(e) => setHrmForm((prev) => ({ ...prev, lastName: e.target.value }))}
                           placeholder="Required"
+                          disabled={!canEditEmployeeName}
                           style={styles({
                             padding: `${spacing.sm} ${spacing.md}`,
                             borderRadius: radius.md,
                             border: `1px solid ${colors.border.default}`,
-                            backgroundColor: colors.bg.page,
+                            backgroundColor: canEditEmployeeName ? colors.bg.page : colors.bg.muted,
                             color: colors.text.primary,
                             fontSize: ts.body.fontSize,
+                            opacity: canEditEmployeeName ? 1 : 0.6,
+                            cursor: canEditEmployeeName ? 'text' : 'not-allowed',
                           })}
                         />
                       </label>
                     </div>
+                    {nameHelperText && (
+                      <div style={styles({ fontSize: ts.bodySmall.fontSize, color: colors.text.muted })}>
+                        {nameHelperText}
+                      </div>
+                    )}
                   </div>
                 )}
 
