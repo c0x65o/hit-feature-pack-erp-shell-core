@@ -561,7 +561,7 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     }, []);
     // Read config synchronously from window global (set by HitAppProvider)
     // Config is STATIC - generated at build time from hit.yaml
-    const [hitConfig] = useState(() => {
+    const [hitConfig, setHitConfig] = useState(() => {
         if (typeof window === 'undefined')
             return null;
         const win = window;
@@ -617,6 +617,22 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
     const [cropModalOpen, setCropModalOpen] = useState(false);
     const [uploadingPicture, setUploadingPicture] = useState(false);
     const fileInputRef = React.useRef(null);
+    useEffect(() => {
+        if (typeof window === 'undefined')
+            return;
+        const win = window;
+        if (win.__HIT_CONFIG) {
+            setHitConfig(win.__HIT_CONFIG);
+            return;
+        }
+        const timer = window.setInterval(() => {
+            if (win.__HIT_CONFIG) {
+                setHitConfig(win.__HIT_CONFIG);
+                window.clearInterval(timer);
+            }
+        }, 200);
+        return () => window.clearInterval(timer);
+    }, []);
     // Keep a lightweight view of the auth token for impersonation UX (token swaps happen without remounting the shell).
     useEffect(() => {
         const refresh = () => {
@@ -841,11 +857,13 @@ function ShellContent({ children, config, navItems, user, activePath, onNavigate
         return String(currentUser?.email || 'User');
     }, [hrmEmployee, currentUser?.name, currentUser?.email]);
     const canEditPhoto = hrmEnabled && Boolean(hrmEmployee?.id);
-    const photoHelperText = !hrmEnabled
-        ? 'Profile photos are managed in HRM. Install HRM to enable uploads.'
-        : !hrmEmployee
-            ? 'Loading employee profile...'
-            : null;
+    const photoHelperText = !hitConfig
+        ? 'Loading configuration...'
+        : !hrmEnabled
+            ? 'Profile photos are managed in HRM. Install HRM to enable uploads.'
+            : !hrmEmployee
+                ? 'Loading employee profile...'
+                : null;
     const photoControlsDisabled = uploadingPicture || !canEditPhoto;
     // Fetch profile picture on initial load if missing (HRM-only)
     useEffect(() => {

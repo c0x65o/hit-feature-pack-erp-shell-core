@@ -792,7 +792,7 @@ function ShellContent({
 
   // Read config synchronously from window global (set by HitAppProvider)
   // Config is STATIC - generated at build time from hit.yaml
-  const [hitConfig] = useState<any | null>(() => {
+  const [hitConfig, setHitConfig] = useState<any | null>(() => {
     if (typeof window === 'undefined') return null;
     const win = window as unknown as { __HIT_CONFIG?: any };
     return win.__HIT_CONFIG || null;
@@ -846,6 +846,22 @@ function ShellContent({
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const win = window as unknown as { __HIT_CONFIG?: any };
+    if (win.__HIT_CONFIG) {
+      setHitConfig(win.__HIT_CONFIG);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (win.__HIT_CONFIG) {
+        setHitConfig(win.__HIT_CONFIG);
+        window.clearInterval(timer);
+      }
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Keep a lightweight view of the auth token for impersonation UX (token swaps happen without remounting the shell).
   useEffect(() => {
@@ -1072,11 +1088,13 @@ function ShellContent({
   }, [hrmEmployee, currentUser?.name, currentUser?.email]);
 
   const canEditPhoto = hrmEnabled && Boolean((hrmEmployee as any)?.id);
-  const photoHelperText = !hrmEnabled
-    ? 'Profile photos are managed in HRM. Install HRM to enable uploads.'
-    : !hrmEmployee
-      ? 'Loading employee profile...'
-      : null;
+  const photoHelperText = !hitConfig
+    ? 'Loading configuration...'
+    : !hrmEnabled
+      ? 'Profile photos are managed in HRM. Install HRM to enable uploads.'
+      : !hrmEmployee
+        ? 'Loading employee profile...'
+        : null;
   const photoControlsDisabled = uploadingPicture || !canEditPhoto;
 
   // Fetch profile picture on initial load if missing (HRM-only)
