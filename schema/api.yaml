@@ -1,0 +1,16 @@
+version: 1
+
+# Pack-owned "special" API routes (schema-visible).
+#
+# These are endpoints that are NOT the schema-generated CRUD routes derived from `entities.*.api.resource`.
+# They must be explicitly declared here so `hit schema validate` can enforce consistency and prevent drift.
+api:
+  routes:
+    - path: /api/table-views/[id]/use
+      methods: [PATCH]
+      handler: table-views-use
+      description: "Mark a view as used (update lastUsedAt)"
+    - path: /api/table-views/[id]/shares
+      methods: [GET, POST, DELETE]
+      handler: table-views-shares
+      description: "List, add, or remove share entries for a view"
