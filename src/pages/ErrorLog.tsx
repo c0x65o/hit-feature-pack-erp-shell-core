@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useUi } from '@hit/ui-kit';
+import { useUi, useErrorLog, type ErrorLogEntry } from '@hit/ui-kit';
 
 // =============================================================================
 // TYPES
@@ -94,7 +94,14 @@ function getStatusLabel(status: number | undefined): string {
 export function ErrorLog() {
   const { Page, Card, Button, Input, Badge, Modal, EmptyState, Spinner, Alert, Tabs } = useUi();
 
-  // Data state
+  // Source toggle: server (audit log) vs client (useErrorLog)
+  const [source, setSource] = useState<'server' | 'client'>('server');
+
+  // Client-side error log
+  const { errors: clientErrors, clearErrors: clearClientErrors, clearError: clearClientError, exportErrors: exportClientErrors } = useErrorLog();
+  const [selectedClientError, setSelectedClientError] = useState<ErrorLogEntry | null>(null);
+
+  // Data state (server)
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,29 +150,49 @@ export function ErrorLog() {
     fetchEvents();
   }, [fetchEvents]);
 
-  // Stats
-  const stats = useMemo(() => {
+  // Stats for server errors
+  const serverStats = useMemo(() => {
     const total = pagination.total;
-    const clientErrors = events.filter((e) => {
+    const clientErrorCount = events.filter((e) => {
       const s = e.details?.responseStatus;
       return s && s >= 400 && s < 500;
     }).length;
-    const serverErrors = events.filter((e) => {
+    const serverErrorCount = events.filter((e) => {
       const s = e.details?.responseStatus;
       return s && s >= 500;
     }).length;
-    return { total, clientErrors, serverErrors };
+    return { total, clientErrorCount, serverErrorCount };
   }, [events, pagination.total]);
 
+  // Stats for client errors
+  const clientStats = useMemo(() => {
+    const total = clientErrors.length;
+    const clientErrorCount = clientErrors.filter((e) => e.status >= 400 && e.status < 500).length;
+    const serverErrorCount = clientErrors.filter((e) => e.status >= 500).length;
+    const networkErrorCount = clientErrors.filter((e) => e.status === 0).length;
+    return { total, clientErrorCount, serverErrorCount, networkErrorCount };
+  }, [clientErrors]);
+
   const handleExport = () => {
-    const json = JSON.stringify(events, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `error-log-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (source === 'client') {
+      const json = exportClientErrors();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `client-errors-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const json = JSON.stringify(events, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `server-errors-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   // Styles
@@ -216,8 +243,26 @@ export function ErrorLog() {
   return (
     <Page
       title="Error Log"
-      description="API errors persisted in audit log"
+      description={source === 'server' ? 'API errors persisted in audit log' : 'Client-side errors from this browser session'}
     >
+      {/* Source Toggle */}
+      <div style={{ padding: '16px 16px 0', display: 'flex', gap: 8 }}>
+        <Button
+          variant={source === 'server' ? 'primary' : 'secondary'}
+          onClick={() => setSource('server')}
+          style={{ fontSize: 13 }}
+        >
+          Server Errors (Audit Log)
+        </Button>
+        <Button
+          variant={source === 'client' ? 'primary' : 'secondary'}
+          onClick={() => setSource('client')}
+          style={{ fontSize: 13 }}
+        >
+          Client Errors ({clientErrors.length})
+        </Button>
+      </div>
+
       {/* Stats Cards */}
       <div
         style={{
@@ -227,50 +272,116 @@ export function ErrorLog() {
           padding: 16,
         }}
       >
-        <Card>
-          <div style={{ padding: '16px 20px', textAlign: 'center' }}>
-            <div
-              style={{
-                fontSize: '28px',
-                fontWeight: 700,
-                fontFamily: 'JetBrains Mono, monospace',
-              }}
-            >
-              {stats.total}
-            </div>
-            <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Total Errors</div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: '16px 20px', textAlign: 'center' }}>
-            <div
-              style={{
-                fontSize: '28px',
-                fontWeight: 700,
-                color: '#ef4444',
-                fontFamily: 'JetBrains Mono, monospace',
-              }}
-            >
-              {stats.serverErrors}
-            </div>
-            <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>5xx Server</div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: '16px 20px', textAlign: 'center' }}>
-            <div
-              style={{
-                fontSize: '28px',
-                fontWeight: 700,
-                color: '#f59e0b',
-                fontFamily: 'JetBrains Mono, monospace',
-              }}
-            >
-              {stats.clientErrors}
-            </div>
-            <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>4xx Client</div>
-          </div>
-        </Card>
+        {source === 'server' ? (
+          <>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {serverStats.total}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Total Errors</div>
+              </div>
+            </Card>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    color: '#ef4444',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {serverStats.serverErrorCount}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>5xx Server</div>
+              </div>
+            </Card>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    color: '#f59e0b',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {serverStats.clientErrorCount}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>4xx Client</div>
+              </div>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {clientStats.total}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Total Errors</div>
+              </div>
+            </Card>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    color: '#ef4444',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {clientStats.serverErrorCount}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>5xx Server</div>
+              </div>
+            </Card>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    color: '#f59e0b',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {clientStats.clientErrorCount}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>4xx Client</div>
+              </div>
+            </Card>
+            <Card>
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    color: '#6366f1',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {clientStats.networkErrorCount}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: 4 }}>Network</div>
+              </div>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Controls */}
@@ -283,46 +394,61 @@ export function ErrorLog() {
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ flex: '1 1 200px', minWidth: 200 }}>
-          <Input
-            placeholder="Search errors..."
-            value={searchQuery}
-            onChange={(v: string | React.ChangeEvent<HTMLInputElement>) => {
-              setSearchQuery(typeof v === 'string' ? v : v.target?.value ?? '');
-              setPagination((p) => ({ ...p, page: 1 }));
-            }}
-          />
-        </div>
+        {source === 'server' && (
+          <>
+            <div style={{ flex: '1 1 200px', minWidth: 200 }}>
+              <Input
+                placeholder="Search errors..."
+                value={searchQuery}
+                onChange={(v: string | React.ChangeEvent<HTMLInputElement>) => {
+                  setSearchQuery(typeof v === 'string' ? v : v.target?.value ?? '');
+                  setPagination((p) => ({ ...p, page: 1 }));
+                }}
+              />
+            </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, opacity: 0.7 }}>Status:</span>
-          {(['error', '4xx', '5xx', 'all'] as const).map((s) => (
-            <Button
-              key={s}
-              variant={statusFilter === s ? 'primary' : 'secondary'}
-              onClick={() => {
-                setStatusFilter(s);
-                setPagination((p) => ({ ...p, page: 1 }));
-              }}
-              style={{ fontSize: 12, padding: '4px 10px' }}
-            >
-              {s === 'error' ? 'All Errors' : s === 'all' ? 'All Events' : s}
-            </Button>
-          ))}
-        </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>Status:</span>
+              {(['error', '4xx', '5xx', 'all'] as const).map((s) => (
+                <Button
+                  key={s}
+                  variant={statusFilter === s ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    setStatusFilter(s);
+                    setPagination((p) => ({ ...p, page: 1 }));
+                  }}
+                  style={{ fontSize: 12, padding: '4px 10px' }}
+                >
+                  {s === 'error' ? 'All Errors' : s === 'all' ? 'All Events' : s}
+                </Button>
+              ))}
+            </div>
+          </>
+        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <Button variant="secondary" onClick={fetchEvents} style={{ fontSize: 12 }}>
-            ↻ Refresh
-          </Button>
+          {source === 'server' ? (
+            <Button variant="secondary" onClick={fetchEvents} style={{ fontSize: 12 }}>
+              ↻ Refresh
+            </Button>
+          ) : (
+            <Button 
+              variant="secondary" 
+              onClick={clearClientErrors} 
+              style={{ fontSize: 12 }}
+              disabled={clientErrors.length === 0}
+            >
+              Clear All
+            </Button>
+          )}
           <Button variant="secondary" onClick={handleExport} style={{ fontSize: 12 }}>
             Export JSON
           </Button>
         </div>
       </div>
 
-      {/* Error Banner */}
-      {error && (
+      {/* Error Banner (server only) */}
+      {source === 'server' && error && (
         <div style={{ padding: '0 16px 16px' }}>
           <Alert variant="error" title="Failed to load">
             {error}
@@ -330,43 +456,44 @@ export function ErrorLog() {
         </div>
       )}
 
-      {/* Error Table */}
-      <div style={{ padding: '0 16px 16px' }}>
-        <Card>
-          {loading ? (
-            <div style={{ padding: 40, textAlign: 'center' }}>
-              <Spinner />
-            </div>
-          ) : events.length === 0 ? (
-            <div style={{ padding: 40 }}>
-              <EmptyState
-                title="No Errors Found"
-                description="API errors will appear here when they are logged."
-              />
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyles}>
-                <thead>
-                  <tr>
-                    <th style={thStyles} onClick={() => handleSort('createdAt')}>
-                      Time {sortIndicator('createdAt')}
-                    </th>
-                    <th style={thStyles} onClick={() => handleSort('status')}>
-                      Status {sortIndicator('status')}
-                    </th>
-                    <th style={thStyles}>Method</th>
-                    <th style={thStyles} onClick={() => handleSort('actorName')}>
-                      User {sortIndicator('actorName')}
-                    </th>
-                    <th style={thStyles} onClick={() => handleSort('path')}>
-                      Path {sortIndicator('path')}
-                    </th>
-                    <th style={thStyles}>Summary</th>
-                    <th style={thStyles}>Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
+      {/* Server Error Table */}
+      {source === 'server' && (
+        <div style={{ padding: '0 16px 16px' }}>
+          <Card>
+            {loading ? (
+              <div style={{ padding: 40, textAlign: 'center' }}>
+                <Spinner />
+              </div>
+            ) : events.length === 0 ? (
+              <div style={{ padding: 40 }}>
+                <EmptyState
+                  title="No Errors Found"
+                  description="API errors will appear here when they are logged."
+                />
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={tableStyles}>
+                  <thead>
+                    <tr>
+                      <th style={thStyles} onClick={() => handleSort('createdAt')}>
+                        Time {sortIndicator('createdAt')}
+                      </th>
+                      <th style={thStyles} onClick={() => handleSort('status')}>
+                        Status {sortIndicator('status')}
+                      </th>
+                      <th style={thStyles}>Method</th>
+                      <th style={thStyles} onClick={() => handleSort('actorName')}>
+                        User {sortIndicator('actorName')}
+                      </th>
+                      <th style={thStyles} onClick={() => handleSort('path')}>
+                        Path {sortIndicator('path')}
+                      </th>
+                      <th style={thStyles}>Summary</th>
+                      <th style={thStyles}>Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                   {events.map((event) => (
                     <tr
                       key={event.id}
@@ -455,9 +582,144 @@ export function ErrorLog() {
           )}
         </Card>
       </div>
+      )}
 
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
+      {/* Client Error Table */}
+      {source === 'client' && (
+        <div style={{ padding: '0 16px 16px' }}>
+          <Card>
+            {clientErrors.length === 0 ? (
+              <div style={{ padding: 40 }}>
+                <EmptyState
+                  title="No Client Errors"
+                  description="Client-side errors from this browser session will appear here."
+                />
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={tableStyles}>
+                  <thead>
+                    <tr>
+                      <th style={thStyles}>Time</th>
+                      <th style={thStyles}>Status</th>
+                      <th style={thStyles}>Method</th>
+                      <th style={thStyles}>Page</th>
+                      <th style={thStyles}>Endpoint</th>
+                      <th style={thStyles}>Message</th>
+                      <th style={thStyles}>Duration</th>
+                      <th style={thStyles}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientErrors.map((err) => (
+                      <tr
+                        key={err.id}
+                        style={rowStyles}
+                        onClick={() => setSelectedClientError(err)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(148,163,184,0.08)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <td style={tdStyles}>
+                          <div style={{ whiteSpace: 'nowrap' }}>
+                            {formatRelativeTime(err.timestamp.toISOString())}
+                          </div>
+                          <div style={{ fontSize: 11, opacity: 0.6 }}>
+                            {formatDate(err.timestamp.toISOString()).split(',')[1]}
+                          </div>
+                        </td>
+                        <td style={tdStyles}>
+                          <Badge variant={getStatusBadgeVariant(err.status)}>
+                            {getStatusLabel(err.status)}
+                          </Badge>
+                        </td>
+                        <td style={tdStyles}>
+                          <Badge variant="default">{err.method || '—'}</Badge>
+                        </td>
+                        <td style={tdStyles}>
+                          <span
+                            style={{
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 12,
+                              maxWidth: 150,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: 'block',
+                            }}
+                            title={err.pageUrl}
+                          >
+                            {err.pageUrl || '—'}
+                          </span>
+                        </td>
+                        <td style={tdStyles}>
+                          <span
+                            style={{
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 12,
+                              maxWidth: 200,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: 'block',
+                            }}
+                            title={err.endpoint || ''}
+                          >
+                            {err.endpoint || '—'}
+                          </span>
+                        </td>
+                        <td style={tdStyles}>
+                          <span
+                            style={{
+                              maxWidth: 250,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: 'block',
+                            }}
+                            title={err.message}
+                          >
+                            {err.message}
+                          </span>
+                        </td>
+                        <td style={tdStyles}>
+                          <span
+                            style={{
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 12,
+                              opacity: err.responseTimeMs ? 1 : 0.5,
+                            }}
+                          >
+                            {err.responseTimeMs ? `${err.responseTimeMs}ms` : '—'}
+                          </span>
+                        </td>
+                        <td style={tdStyles}>
+                          <Button
+                            variant="secondary"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              clearClientError(err.id);
+                            }}
+                            style={{ fontSize: 11, padding: '2px 8px' }}
+                          >
+                            ✕
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Pagination (server only) */}
+      {source === 'server' && pagination.totalPages > 1 && (
         <div style={{ padding: '0 16px 16px', display: 'flex', justifyContent: 'center', gap: 8 }}>
           <Button
             variant="secondary"
@@ -576,6 +838,111 @@ export function ErrorLog() {
                       >
                         {JSON.stringify(selectedEvent, null, 2)}
                       </pre>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* Client Error Detail Modal */}
+      <Modal
+        open={!!selectedClientError}
+        onClose={() => setSelectedClientError(null)}
+        title="Client Error Details"
+      >
+        {selectedClientError && (
+          <div style={{ padding: 16 }}>
+            <Tabs
+              tabs={[
+                {
+                  id: 'overview',
+                  label: 'Overview',
+                  content: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
+                      <DetailRow label="Timestamp" value={formatDate(selectedClientError.timestamp.toISOString())} />
+                      <DetailRow label="Status" value={getStatusLabel(selectedClientError.status)} />
+                      <DetailRow label="Method" value={selectedClientError.method || '—'} />
+                      <DetailRow label="Endpoint" value={selectedClientError.endpoint || '—'} mono />
+                      <DetailRow label="Page URL" value={selectedClientError.pageUrl} mono />
+                      <DetailRow label="User" value={selectedClientError.userEmail || 'Anonymous'} />
+                      <DetailRow label="Duration" value={selectedClientError.responseTimeMs ? `${selectedClientError.responseTimeMs}ms` : '—'} />
+                      <DetailRow label="Message" value={selectedClientError.message} />
+                      <DetailRow label="Source" value={selectedClientError.source} />
+                    </div>
+                  ),
+                },
+                {
+                  id: 'payload',
+                  label: 'Payload',
+                  content: (
+                    <div style={{ paddingTop: 16 }}>
+                      {selectedClientError.payload ? (
+                        <pre
+                          style={{
+                            background: 'rgba(0,0,0,0.2)',
+                            padding: 12,
+                            borderRadius: 8,
+                            overflow: 'auto',
+                            fontSize: 12,
+                            fontFamily: 'JetBrains Mono, monospace',
+                            maxHeight: 300,
+                          }}
+                        >
+                          {JSON.stringify(selectedClientError.payload, null, 2)}
+                        </pre>
+                      ) : (
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No payload captured.</div>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  id: 'fieldErrors',
+                  label: 'Field Errors',
+                  content: (
+                    <div style={{ paddingTop: 16 }}>
+                      {selectedClientError.fieldErrors && Object.keys(selectedClientError.fieldErrors).length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {Object.entries(selectedClientError.fieldErrors).map(([field, msg]) => (
+                            <div key={field} style={{ display: 'flex', gap: 8 }}>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600 }}>
+                                {field}:
+                              </span>
+                              <span style={{ fontSize: 13 }}>{msg}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No field errors.</div>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  id: 'raw',
+                  label: 'Raw Error',
+                  content: (
+                    <div style={{ paddingTop: 16 }}>
+                      {selectedClientError.rawError ? (
+                        <pre
+                          style={{
+                            background: 'rgba(0,0,0,0.2)',
+                            padding: 12,
+                            borderRadius: 8,
+                            overflow: 'auto',
+                            fontSize: 12,
+                            fontFamily: 'JetBrains Mono, monospace',
+                            maxHeight: 300,
+                          }}
+                        >
+                          {JSON.stringify(selectedClientError.rawError, null, 2)}
+                        </pre>
+                      ) : (
+                        <div style={{ opacity: 0.6, fontSize: 13 }}>No raw error data.</div>
+                      )}
                     </div>
                   ),
                 },

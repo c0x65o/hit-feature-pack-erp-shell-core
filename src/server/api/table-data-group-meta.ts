@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SQL, sql, and, or, eq, ne, ilike, notIlike, gt, lt, gte, lte, inArray, isNull, isNotNull } from 'drizzle-orm';
+import { SQL, sql, and, or, eq, ne, ilike, notIlike, gt, lt, gte, lte, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { extractUserFromRequest } from '../auth';
 import { requireActionPermission } from '@hit/feature-pack-auth-core/server/lib/action-check';
+import { tableViews, tableViewFilters, tableViewShares, type TableView, type TableViewFilter } from '@/lib/feature-pack-schemas';
+import { resolveUserPrincipals, resolveUserOrgScope } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
+import { getStaticViewById } from '../lib/static-table-views';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -120,7 +123,9 @@ function resolveGroupByField(spec: any, requestedField: string): {
   if (!fields || typeof fields !== 'object') return null;
 
   const direct = fields[requestedField];
-  if (direct && typeof direct === 'object') {
+  const directIsVirtual =
+    Boolean(direct && typeof direct === 'object' && (direct as any)?.virtual === true);
+  if (direct && typeof direct === 'object' && !directIsVirtual) {
     const labelFromRow = (direct as any)?.labelFromRow || (direct as any)?.reference?.labelFromRow || null;
     const optionSourceKey = String((direct as any)?.optionSource || '').trim() || null;
     const referenceEntity = String((direct as any)?.reference?.entityType || '').trim() || null;
@@ -311,24 +316,144 @@ function safeLabelKey(key: string | null | undefined): string {
   return s.trim();
 }
 
+function parseFilterValue(raw: string | null | undefined, valueType?: string | null): any {
+  if (raw == null) return null;
+  const t = String(valueType || '').toLowerCase();
+  const s = String(raw);
+  if (t === 'number' || t === 'int' || t === 'integer' || t === 'float') {
+    const n = Number(s);
+    return Number.isFinite(n) ? n : s;
+  }
+  if (t === 'boolean' || t === 'bool') {
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+    return s;
+  }
+  if (t === 'array' || t === 'json' || t === 'object') {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return s;
+    }
+  }
+  return s;
+}
+
+async function loadViewForUser(request: NextRequest, viewId: string) {
+  const user = extractUserFromRequest(request);
+  if (!user) return { error: 'Unauthorized', status: 401 };
+
+  const staticView = getStaticViewById(viewId);
+  if (staticView) {
+    return {
+      view: staticView,
+      filters: staticView.filters || [],
+      tableId: staticView.tableId,
+    };
+  }
+
+  const db = getDb();
+  const rows = await db.select().from(tableViews).where(eq(tableViews.id, viewId)).limit(1);
+  const view = Array.isArray(rows) ? rows[0] : null;
+  if (!view) return { error: 'View not found', status: 404 };
+
+  if (view.isSystem || view.userId === user.sub) {
+    const filters = await db.select().from(tableViewFilters).where(eq(tableViewFilters.viewId, view.id));
+    return { view, filters, tableId: view.tableId };
+  }
+
+  const principals = await resolveUserPrincipals({ request, user });
+  const userGroups = principals.groupIds || [];
+  const userRoles = principals.roles || [];
+  const orgScope = await resolveUserOrgScope({ request, user });
+  const divisionIds = orgScope.divisionIds || [];
+  const departmentIds = orgScope.departmentIds || [];
+  const locationIds = orgScope.locationIds || [];
+
+  const shareConditions = [
+    and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, user.sub)),
+  ];
+  const userEmail = String(user.email || '').trim();
+  if (userEmail && userEmail !== user.sub) {
+    shareConditions.push(and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, userEmail)));
+  }
+  if (userGroups.length > 0) {
+    shareConditions.push(and(eq(tableViewShares.principalType, 'group'), inArray(tableViewShares.principalId, userGroups)));
+  }
+  if (userRoles.length > 0) {
+    shareConditions.push(and(eq(tableViewShares.principalType, 'role'), inArray(tableViewShares.principalId, userRoles)));
+  }
+  if (divisionIds.length > 0) {
+    shareConditions.push(and(sql`${tableViewShares.principalType}::text = ${'division'}`, inArray(tableViewShares.principalId, divisionIds)));
+  }
+  if (departmentIds.length > 0) {
+    shareConditions.push(and(sql`${tableViewShares.principalType}::text = ${'department'}`, inArray(tableViewShares.principalId, departmentIds)));
+  }
+  if (locationIds.length > 0) {
+    shareConditions.push(and(sql`${tableViewShares.principalType}::text = ${'location'}`, inArray(tableViewShares.principalId, locationIds)));
+  }
+
+  const shareRows = await db
+    .select({ id: tableViewShares.id })
+    .from(tableViewShares)
+    .where(and(eq(tableViewShares.viewId, view.id), or(...shareConditions)))
+    .limit(1);
+  if (!shareRows || shareRows.length === 0) {
+    return { error: 'Forbidden', status: 403 };
+  }
+
+  const filters = await db.select().from(tableViewFilters).where(eq(tableViewFilters.viewId, view.id));
+  return { view, filters, tableId: view.tableId };
+}
+
 export async function POST(request: NextRequest) {
   const user = extractUserFromRequest(request);
   if (!user) return jsonError('Unauthorized', 401);
 
   const body = (await request.json().catch(() => null)) as
     | {
+        viewId?: unknown;
         tableId?: unknown;
         groupBy?: GroupByInput;
         filters?: ViewFilter[];
         filterMode?: string;
         search?: string;
+        includeRows?: unknown;
+        groupPageSize?: unknown;
       }
     | null;
   if (!body) return jsonError('Invalid JSON body', 400);
 
-  const tableId = typeof body.tableId === 'string' ? body.tableId.trim() : '';
-  const groupBy = (body.groupBy && typeof body.groupBy === 'object' ? body.groupBy : {}) as GroupByInput;
-  const groupByField = typeof groupBy.field === 'string' ? groupBy.field.trim() : '';
+  const viewId = typeof body.viewId === 'string' ? body.viewId.trim() : '';
+  const tableIdInput = typeof body.tableId === 'string' ? body.tableId.trim() : '';
+  let view: any | null = null;
+  let tableId = tableIdInput;
+  let groupBy = (body.groupBy && typeof body.groupBy === 'object' ? body.groupBy : {}) as GroupByInput;
+  let groupByField = typeof groupBy.field === 'string' ? groupBy.field.trim() : '';
+  let filters = Array.isArray(body.filters) ? body.filters : [];
+  let filterMode: 'all' | 'any' = body.filterMode === 'any' ? 'any' : 'all';
+
+  if (viewId) {
+    const loaded = await loadViewForUser(request, viewId);
+    if ((loaded as any).error) {
+      return jsonError((loaded as any).error, (loaded as any).status || 400);
+    }
+    view = (loaded as any).view;
+    tableId = String((loaded as any).tableId || '');
+    const vFilters = Array.isArray((loaded as any).filters) ? (loaded as any).filters : [];
+    filters = vFilters.map((f: TableViewFilter) => ({
+      field: String(f.field || ''),
+      operator: String(f.operator || ''),
+      value: parseFilterValue(f.value, f.valueType),
+    })).filter((f: ViewFilter) => f.field && f.operator);
+    const modeRaw = (view?.metadata as any)?.filterMode;
+    filterMode = modeRaw === 'any' ? 'any' : 'all';
+    if (view?.groupBy && typeof view.groupBy === 'object') {
+      groupBy = view.groupBy as GroupByInput;
+      groupByField = typeof groupBy.field === 'string' ? groupBy.field.trim() : '';
+    }
+  }
+
   if (!tableId) return jsonError('Missing tableId', 400);
   if (!groupByField) return jsonError('Missing groupBy.field', 400);
 
@@ -352,9 +477,10 @@ export async function POST(request: NextRequest) {
   const groupCol = (table as any)[effectiveField];
   if (!groupCol) return jsonError(`Unknown groupBy field: ${groupByField}`, 400);
 
-  const filters = Array.isArray(body.filters) ? body.filters : [];
-  const filterMode = body.filterMode === 'any' ? 'any' : 'all';
   const search = typeof body.search === 'string' ? body.search.trim() : '';
+  const includeRows = body.includeRows === true;
+  const groupPageSizeRaw = Number(body.groupPageSize || 10000);
+  const groupPageSize = Math.min(10000, Math.max(1, Number.isFinite(groupPageSizeRaw) ? groupPageSizeRaw : 10000));
 
   const columnMap: Record<string, AnyColumn> = {};
   const fields = (uiSpec && typeof uiSpec === 'object' ? (uiSpec as any).fields : null) || {};
@@ -382,10 +508,9 @@ export async function POST(request: NextRequest) {
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const db = getDb();
-  const groupExpr = sql<string>`coalesce(${groupCol}, '')`;
   const rows = whereClause
-    ? await db.select({ groupValue: groupExpr, count: sql<number>`count(*)` }).from(table).where(whereClause).groupBy(groupCol)
-    : await db.select({ groupValue: groupExpr, count: sql<number>`count(*)` }).from(table).groupBy(groupCol);
+    ? await db.select({ groupValue: groupCol, count: sql<number>`count(*)` }).from(table).where(whereClause).groupBy(groupCol)
+    : await db.select({ groupValue: groupCol, count: sql<number>`count(*)` }).from(table).groupBy(groupCol);
 
   const fieldSpec = groupByResolved?.fieldSpec || fields?.[groupByField] || {};
   const optionSource = String((fieldSpec as any)?.optionSource || '').trim();
@@ -412,7 +537,7 @@ export async function POST(request: NextRequest) {
     const count = Number(row?.count ?? 0) || 0;
     groupCounts[key] = (groupCounts[key] ?? 0) + count;
     const sortOrder = Number.isFinite(orderMap[id]) ? orderMap[id] : null;
-    return { key, count, sortOrder };
+    return { key, count, sortOrder, groupValue: id, label: key };
   });
 
   const orderByRaw = groupBy.orderBy || 'auto';
@@ -454,7 +579,48 @@ export async function POST(request: NextRequest) {
     sorted.sort((a, b) => dir * compareKeys(a.key, b.key));
   }
 
-  const groupOrder = sorted.map((e) => e.key);
+  const seenKeys = new Set<string>();
+  const orderedEntries = sorted.filter((e) => {
+    if (seenKeys.has(e.key)) return false;
+    seenKeys.add(e.key);
+    return true;
+  });
+  const groupOrder = orderedEntries.map((e) => e.key);
+
+  let groups: Array<{ key: string; total: number; rows: any[] }> | undefined = undefined;
+  if (includeRows) {
+    const tableAny = table as any;
+    const sortId = Array.isArray((view as any)?.sorting) && (view as any).sorting.length > 0
+      ? String((view as any).sorting[0]?.id || '')
+      : '';
+    const sortDesc = Array.isArray((view as any)?.sorting) && (view as any).sorting.length > 0
+      ? Boolean((view as any).sorting[0]?.desc)
+      : false;
+    const rowOrderCol = (sortId && (tableAny as any)[sortId]) ? (tableAny as any)[sortId] : (tableAny as any).id;
+    const rowOrder = sortDesc ? desc(rowOrderCol) : asc(rowOrderCol);
+
+    groups = [];
+    for (const entry of orderedEntries) {
+      const groupValue = entry.groupValue;
+      const groupCond = groupValue ? eq(groupCol, groupValue) : isNull(groupCol);
+      const rowsQuery = whereClause
+        ? await db.select().from(table).where(and(whereClause, groupCond)).orderBy(rowOrder).limit(groupPageSize)
+        : await db.select().from(table).where(groupCond).orderBy(rowOrder).limit(groupPageSize);
+      const enriched = (rowsQuery as any[]).map((row) => {
+        const out = { ...row };
+        if (labelFromRow && groupValue && (!out[labelFromRow] || String(out[labelFromRow]).trim() === '')) {
+          const label = labelMap[groupValue];
+          if (label) out[labelFromRow] = label;
+        }
+        return out;
+      });
+      groups.push({
+        key: entry.key,
+        total: groupCounts[entry.key] ?? 0,
+        rows: enriched,
+      });
+    }
+  }
 
   return NextResponse.json({
     tableId,
@@ -465,5 +631,6 @@ export async function POST(request: NextRequest) {
     },
     groupCounts,
     groupOrder,
+    ...(groups ? { groups } : {}),
   });
 }

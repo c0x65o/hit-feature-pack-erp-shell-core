@@ -14,6 +14,12 @@ export type StaticTableViewSpec = {
     sorting?: any;
     groupBy?: any;
     columnOrder?: string[] | null;
+    /**
+     * Web columns for this view - ordered list of column keys to show.
+     * If specified, only these columns are visible (in this order).
+     * Takes precedence over columnOrder and columnVisibility.
+     */
+    columns?: string[] | null;
     mobileColumns?: string[] | null;
     metadata?: any;
     filters?: StaticTableViewFilterSpec[];
@@ -29,6 +35,11 @@ export declare function getStaticViewsForTable(tableId: string): Array<{
     columnVisibility: any;
     sorting: any;
     groupBy: any;
+    /**
+     * Web columns for this view - ordered list of column keys to show.
+     * If specified, only these columns are visible (in this order).
+     */
+    columns: string[] | null;
     columnOrder: string[] | null;
     mobileColumns: string[] | null;
     description: string | null;
@@ -58,6 +69,11 @@ export declare function getStaticViewById(viewId: string): {
     columnVisibility: any;
     sorting: any;
     groupBy: any;
+    /**
+     * Web columns for this view - ordered list of column keys to show.
+     * If specified, only these columns are visible (in this order).
+     */
+    columns: string[] | null;
     columnOrder: string[] | null;
     mobileColumns: string[] | null;
     description: string | null;

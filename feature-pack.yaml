@@ -74,6 +74,10 @@ api:
       methods: [POST]
       handler: "@hit/feature-pack-erp-shell-core/server/api/table-data-group-meta"
       description: "Compute group order + counts for a tableId + view grouping"
+    - path: /api/table-data/query
+      methods: [POST]
+      handler: "@hit/feature-pack-erp-shell-core/server/api/table-data-query"
+      description: "Canonical table data query (viewId/search/grouping)"
 
     # Dashboards + Reports moved to dedicated feature packs:
     # - @hit/feature-pack-dashboards owns /api/dashboard-definitions*
@@ -89,6 +93,10 @@ api:
       description: "Tool surface for a given feature pack (from .hit/generated/capabilities.json)"
 
 routes:
+  - path: /hub
+    page: MyStuff
+    roles: []
+    default_roles_allow: [user]
   - path: /logs/errors
     page: ErrorLog
     roles: []
@@ -101,6 +109,13 @@ routes:
     authz: { entity: logs, verb: read }
 
 nav:
+  - id: my-hub
+    label: My Hub
+    icon: Home
+    path: /hub
+    group: main
+    weight: 10
+    showWhen: authenticated
   - id: logs
     label: Logs
     icon: FileText

@@ -23,7 +23,8 @@ function normalizeStaticView(tableId, v) {
     if (!id || !name)
         return null;
     const description = v?.description === undefined ? null : (v?.description ?? null);
-    // Parse columnOrder and mobileColumns as string arrays
+    // Parse columns, columnOrder and mobileColumns as string arrays
+    const columns = Array.isArray(v?.columns) ? v.columns.map((c) => String(c)) : null;
     const columnOrder = Array.isArray(v?.columnOrder) ? v.columnOrder.map((c) => String(c)) : null;
     const mobileColumns = Array.isArray(v?.mobileColumns) ? v.mobileColumns.map((c) => String(c)) : null;
     return {
@@ -34,6 +35,7 @@ function normalizeStaticView(tableId, v) {
         columnVisibility: v?.columnVisibility ?? null,
         sorting: v?.sorting ?? null,
         groupBy: v?.groupBy ?? null,
+        columns,
         columnOrder,
         mobileColumns,
         metadata: (v?.metadata && typeof v?.metadata === 'object') ? v?.metadata : null,
@@ -79,6 +81,7 @@ export function getStaticViewsForTable(tableId) {
             columnVisibility: spec.columnVisibility ?? null,
             sorting: spec.sorting ?? null,
             groupBy: spec.groupBy ?? null,
+            columns: spec.columns ?? null,
             columnOrder: spec.columnOrder ?? null,
             mobileColumns: spec.mobileColumns ?? null,
             metadata: spec.metadata ?? null,

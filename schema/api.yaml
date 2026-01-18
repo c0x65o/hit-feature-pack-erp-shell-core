@@ -18,3 +18,7 @@ api:
       methods: [POST]
       handler: table-data-group-meta
       description: "Compute group order + counts for a tableId + view grouping"
+    - path: /api/table-data/query
+      methods: [POST]
+      handler: table-data-query
+      description: "Canonical table data query (viewId/search/grouping)"
