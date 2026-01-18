@@ -47,6 +47,12 @@ function getEntities(): Record<string, any> {
   return (HIT_UI_SPECS as any)?.entities || {};
 }
 
+function getEntitySpec(entityKey: string): any | null {
+  const entities = getEntities();
+  const spec = entities?.[entityKey];
+  return spec && typeof spec === 'object' ? spec : null;
+}
+
 function getEntityByTableId(tableId: string): { entityKey: string; spec: any } | null {
   const entities = getEntities();
   for (const [entityKey, spec] of Object.entries(entities)) {
@@ -58,6 +64,7 @@ function getEntityByTableId(tableId: string): { entityKey: string; spec: any } |
 }
 
 function getTableFromSpec(spec: any): any | null {
+  if (!schema) return null;
   const storage = spec && typeof spec === 'object' ? (spec as any).storage : null;
   const tableName =
     (storage && typeof storage.drizzleTable === 'string' ? storage.drizzleTable : '') ||
@@ -101,10 +108,43 @@ function pickOrderField(table: any): string | null {
   return null;
 }
 
+function resolveGroupByField(spec: any, requestedField: string): {
+  fieldKey: string;
+  fieldSpec: any;
+  labelFromRow?: string | null;
+  optionSourceKey?: string | null;
+  referenceEntity?: string | null;
+} | null {
+  if (!spec || typeof spec !== 'object') return null;
+  const fields = (spec as any).fields;
+  if (!fields || typeof fields !== 'object') return null;
+
+  const direct = fields[requestedField];
+  if (direct && typeof direct === 'object') {
+    const labelFromRow = (direct as any)?.labelFromRow || (direct as any)?.reference?.labelFromRow || null;
+    const optionSourceKey = String((direct as any)?.optionSource || '').trim() || null;
+    const referenceEntity = String((direct as any)?.reference?.entityType || '').trim() || null;
+    return { fieldKey: requestedField, fieldSpec: direct, labelFromRow, optionSourceKey, referenceEntity };
+  }
+
+  for (const [fieldKey, fsAny] of Object.entries(fields)) {
+    const fs = fsAny && typeof fsAny === 'object' ? (fsAny as any) : null;
+    if (!fs) continue;
+    const labelFromRow = fs?.labelFromRow || fs?.reference?.labelFromRow || null;
+    if (labelFromRow && String(labelFromRow).trim() === requestedField) {
+      const optionSourceKey = String(fs?.optionSource || '').trim() || null;
+      const referenceEntity = String(fs?.reference?.entityType || '').trim() || null;
+      return { fieldKey: String(fieldKey), fieldSpec: fs, labelFromRow: String(labelFromRow), optionSourceKey, referenceEntity };
+    }
+  }
+
+  return null;
+}
+
 async function loadOptionSourceMap(optionSource: string, labelKeyOverride?: string | null) {
   const entityKey = resolveEntityKeyFromOptionSource(optionSource);
   if (!entityKey) return { labelMap: {}, orderMap: {} };
-  const spec = getEntities()?.[entityKey];
+  const spec = getEntitySpec(entityKey);
   const table = spec ? getTableFromSpec(spec) : null;
   if (!table) return { labelMap: {}, orderMap: {} };
 
@@ -307,7 +347,9 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
   }
 
-  const groupCol = (table as any)[groupByField];
+  const groupByResolved = resolveGroupByField(uiSpec, groupByField);
+  const effectiveField = groupByResolved?.fieldKey || groupByField;
+  const groupCol = (table as any)[effectiveField];
   if (!groupCol) return jsonError(`Unknown groupBy field: ${groupByField}`, 400);
 
   const filters = Array.isArray(body.filters) ? body.filters : [];
@@ -345,12 +387,17 @@ export async function POST(request: NextRequest) {
     ? await db.select({ groupValue: groupExpr, count: sql<number>`count(*)` }).from(table).where(whereClause).groupBy(groupCol)
     : await db.select({ groupValue: groupExpr, count: sql<number>`count(*)` }).from(table).groupBy(groupCol);
 
-  const fieldSpec = fields?.[groupByField] || {};
+  const fieldSpec = groupByResolved?.fieldSpec || fields?.[groupByField] || {};
   const optionSource = String((fieldSpec as any)?.optionSource || '').trim();
   const referenceEntity = String((fieldSpec as any)?.reference?.entityType || '').trim();
-  const labelFromRow = String((fieldSpec as any)?.labelFromRow || '').trim();
+  const labelFromRow = String(groupByResolved?.labelFromRow || '').trim();
   const labelEntityKey = referenceEntity || (optionSource ? resolveEntityKeyFromOptionSource(optionSource) : null);
-  const labelKeyOverride = labelEntityKey ? labelFromRow || inferLabelFieldFromEntitySpec(labelEntityKey) : null;
+  const labelEntitySpec = labelEntityKey ? getEntitySpec(labelEntityKey) : null;
+  const labelEntityFields = labelEntitySpec && typeof labelEntitySpec === 'object' ? (labelEntitySpec as any).fields : null;
+  const labelKeyOverride =
+    labelFromRow && labelEntityFields && typeof labelEntityFields === 'object' && labelEntityFields[labelFromRow]
+      ? labelFromRow
+      : null;
   const optionSourceKey = optionSource || (labelEntityKey ? labelEntityKey : '');
 
   const { labelMap, orderMap } = optionSourceKey

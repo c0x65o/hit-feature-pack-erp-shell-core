@@ -14,3 +14,7 @@ api:
       methods: [GET, POST, DELETE]
       handler: table-views-shares
       description: "List, add, or remove share entries for a view"
+    - path: /api/table-data/group-meta
+      methods: [POST]
+      handler: table-data-group-meta
+      description: "Compute group order + counts for a tableId + view grouping"
