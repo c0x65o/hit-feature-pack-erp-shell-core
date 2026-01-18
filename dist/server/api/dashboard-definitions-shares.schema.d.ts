@@ -10,8 +10,8 @@ export declare const postBodySchema: z.ZodObject<{
     }>;
     principalId: z.ZodString;
     permission: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
-        full: "full";
         view: "view";
+        full: "full";
     }>>>;
 }, z.core.$strip>;
 //# sourceMappingURL=dashboard-definitions-shares.schema.d.ts.map

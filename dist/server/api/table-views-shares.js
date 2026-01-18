@@ -5,13 +5,68 @@ import { tableViews, tableViewShares } from '@/lib/feature-pack-schemas';
 import { eq, and, sql } from 'drizzle-orm';
 import { extractUserFromRequest } from '../auth';
 import { isStaticViewId } from '../lib/static-table-views';
+import { requireActionPermission } from '@hit/feature-pack-auth-core/server/lib/action-check';
+import { resolveUserOrgScope } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
+import { isLddIdInOrgScope, isUserInOrgScope } from '@hit/feature-pack-auth-core/server/lib/ldd-scoping';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-/**
- * Check if user has admin role
- */
-function isAdmin(roles) {
-    return Array.isArray(roles) && roles.some((r) => String(r || '').toLowerCase() === 'admin');
+function isLddPrincipalType(value) {
+    return value === 'location' || value === 'division' || value === 'department';
+}
+function resolveShareType(principalType) {
+    if (principalType === 'user')
+        return 'user';
+    if (principalType === 'group' || principalType === 'role')
+        return 'group';
+    if (isLddPrincipalType(principalType))
+        return 'ldd';
+    return null;
+}
+async function requireErpShellAction(request, actionKey) {
+    return requireActionPermission(request, actionKey, { logPrefix: 'ERP-Shell' });
+}
+async function enforceSharePermissions(args) {
+    const { request, user, principalType, principalId } = args;
+    const shareType = resolveShareType(principalType);
+    if (!shareType) {
+        return NextResponse.json({ error: 'principalType must be user, group, role, location, division, or department' }, { status: 400 });
+    }
+    const shareActionKey = shareType === 'user'
+        ? 'erp-shell-core.table-views.share.user'
+        : shareType === 'group'
+            ? 'erp-shell-core.table-views.share.group'
+            : 'erp-shell-core.table-views.share.ldd';
+    const shareDenied = await requireErpShellAction(request, shareActionKey);
+    if (shareDenied)
+        return shareDenied;
+    const shareOutsideKey = 'erp-shell-core.table-views.scope.share_outside';
+    if (shareType === 'group') {
+        const outsideDenied = await requireErpShellAction(request, shareOutsideKey);
+        if (outsideDenied)
+            return outsideDenied;
+        return null;
+    }
+    const orgScope = await resolveUserOrgScope({ request, user });
+    if (shareType === 'user') {
+        const inScope = await isUserInOrgScope({ userKey: principalId, orgScope });
+        if (!inScope) {
+            const outsideDenied = await requireErpShellAction(request, shareOutsideKey);
+            if (outsideDenied)
+                return outsideDenied;
+        }
+        return null;
+    }
+    const inScope = isLddIdInOrgScope({
+        orgScope,
+        principalType: principalType,
+        principalId,
+    });
+    if (!inScope) {
+        const outsideDenied = await requireErpShellAction(request, shareOutsideKey);
+        if (outsideDenied)
+            return outsideDenied;
+    }
+    return null;
 }
 /**
  * GET /api/table-views/[id]/shares
@@ -75,7 +130,8 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'Cannot share static system views' }, { status: 400 });
         }
         const body = await request.json();
-        const { principalType, principalId } = body;
+        const principalType = String(body?.principalType || '').trim();
+        const principalId = String(body?.principalId || '').trim();
         // Validate input
         if (!principalType || !principalId) {
             return NextResponse.json({ error: 'principalType and principalId are required' }, { status: 400 });
@@ -83,12 +139,9 @@ export async function POST(request, { params }) {
         if (!['user', 'group', 'role', 'location', 'division', 'department'].includes(principalType)) {
             return NextResponse.json({ error: 'principalType must be user, group, role, location, division, or department' }, { status: 400 });
         }
-        // Non-admins can only share with users
-        if (!isAdmin(user.roles) && principalType !== 'user') {
-            return NextResponse.json({
-                error: 'Only admins can share views with non-user principals (groups, roles, or LDD). You can share with individual users.'
-            }, { status: 403 });
-        }
+        const shareDenied = await enforceSharePermissions({ request, user, principalType, principalId });
+        if (shareDenied)
+            return shareDenied;
         // Get view and verify ownership
         const [view] = await db
             .select()
@@ -112,10 +165,11 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'Cannot share a view with yourself' }, { status: 400 });
         }
         // Check if share already exists
+        const principalTypeCast = principalType;
         const [existingShare] = await db
             .select()
             .from(tableViewShares)
-            .where(and(eq(tableViewShares.viewId, viewId), eq(tableViewShares.principalType, principalType), eq(tableViewShares.principalId, principalId)))
+            .where(and(eq(tableViewShares.viewId, viewId), eq(tableViewShares.principalType, principalTypeCast), eq(tableViewShares.principalId, principalId)))
             .limit(1);
         if (existingShare) {
             return NextResponse.json({ error: 'View is already shared with this principal' }, { status: 409 });
@@ -125,7 +179,7 @@ export async function POST(request, { params }) {
             .insert(tableViewShares)
             .values({
             viewId,
-            principalType,
+            principalType: principalTypeCast,
             principalId,
             sharedBy: user.sub,
             sharedByName: user.name || user.email || user.sub,

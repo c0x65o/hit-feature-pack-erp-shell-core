@@ -37,3 +37,21 @@ permissions:
       label: "ERP Shell Core Logs Read Scope = Own"
       description: "Read only logs you own (not applicable - logs are system-level)."
       default_enabled: false
+
+    # Table view sharing
+    - key: erp-shell-core.table-views.share.user
+      label: "ERP Shell Core Table Views Share Users"
+      description: "Allow sharing table views with individual users."
+      default_enabled: false
+    - key: erp-shell-core.table-views.share.group
+      label: "ERP Shell Core Table Views Share Groups"
+      description: "Allow sharing table views with groups."
+      default_enabled: false
+    - key: erp-shell-core.table-views.share.ldd
+      label: "ERP Shell Core Table Views Share LDD"
+      description: "Allow sharing table views with locations, divisions, or departments."
+      default_enabled: false
+    - key: erp-shell-core.table-views.scope.share_outside
+      label: "ERP Shell Core Table Views LDD Share Outside"
+      description: "Allow sharing table views to users or LDD outside your org scope."
+      default_enabled: false

@@ -27,11 +27,7 @@ export declare function POST(request: NextRequest, { params }: {
     params: {
         id: string;
     };
-}): Promise<NextResponse<{
-    data: any;
-}> | NextResponse<{
-    error: any;
-}>>;
+}): Promise<NextResponse<unknown>>;
 /**
  * DELETE /api/table-views/[id]/shares
  * Remove a share entry for a view

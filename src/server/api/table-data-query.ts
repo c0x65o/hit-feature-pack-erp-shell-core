@@ -6,6 +6,7 @@ import { getDb } from '@/lib/db';
 import { tableViews, tableViewFilters, tableViewShares, type TableView, type TableViewFilter } from '@/lib/feature-pack-schemas';
 import { resolveUserPrincipals, resolveUserOrgScope } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
 import { getStaticViewById } from '../lib/static-table-views';
+import { buildTableGroupMeta } from '../lib/tableGroupMeta';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -176,6 +177,7 @@ async function loadViewForUser(request: NextRequest, viewId: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestUser = extractUserFromRequest(request);
   const body = (await request.json().catch(() => null)) as
     | {
         viewId?: unknown;
@@ -269,37 +271,28 @@ export async function POST(request: NextRequest) {
     const groupPageSizeRaw = Number(body.groupPageSize || 10000);
     const groupPageSize = Math.min(10000, Math.max(1, Number.isFinite(groupPageSizeRaw) ? groupPageSizeRaw : 10000));
 
-    const groupMetaBody: Record<string, unknown> = viewId
-      ? { viewId }
-      : {
-          tableId,
-          groupBy: {
-            field: groupByField,
-            orderBy: groupBy.orderBy,
-            orderDirection: groupBy.orderDirection,
-          },
-          filters,
-          filterMode,
-        };
-    if (search) groupMetaBody.search = search;
-    groupMetaBody.includeRows = true;
-    groupMetaBody.groupPageSize = groupPageSize;
-
-    const groupRes = await callSameOrigin(request, '/api/table-data/group-meta', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(groupMetaBody),
+    const groupResult = await buildTableGroupMeta({
+      tableId,
+      groupBy,
+      filters,
+      filterMode,
+      search,
+      includeRows: true,
+      groupPageSize,
+      view: view ? { sorting: view.sorting as Array<{ id?: string; desc?: boolean }> | undefined } : null,
+      currentUserId: requestUser?.sub || null,
+      entity,
     });
-    const groupJson = await groupRes.json().catch(() => ({}));
-    if (!groupRes.ok) {
-      return NextResponse.json(groupJson?.error ? groupJson : { error: 'Failed to load group meta' }, { status: groupRes.status });
+
+    if ('error' in groupResult) {
+      return NextResponse.json({ error: groupResult.error }, { status: groupResult.status });
     }
 
-    const groupsRaw = Array.isArray((groupJson as any)?.groups) ? (groupJson as any).groups : [];
+    const groupsRaw = Array.isArray((groupResult as any)?.groups) ? (groupResult as any).groups : [];
     const items = groupsRaw.flatMap((g: any) => (Array.isArray(g?.rows) ? g.rows : []));
 
     return NextResponse.json({
-      ...groupJson,
+      ...groupResult,
       tableId,
       viewId: viewId || null,
       items,

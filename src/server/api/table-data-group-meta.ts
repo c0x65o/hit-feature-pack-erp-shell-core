@@ -1,319 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SQL, sql, and, or, eq, ne, ilike, notIlike, gt, lt, gte, lte, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
-import type { AnyColumn } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { extractUserFromRequest } from '../auth';
 import { requireActionPermission } from '@hit/feature-pack-auth-core/server/lib/action-check';
 import { tableViews, tableViewFilters, tableViewShares, type TableView, type TableViewFilter } from '@/lib/feature-pack-schemas';
 import { resolveUserPrincipals, resolveUserOrgScope } from '@hit/feature-pack-auth-core/server/lib/acl-utils';
 import { getStaticViewById } from '../lib/static-table-views';
+import { buildTableGroupMeta, getEntityByTableId, getTableFromSpec, type GroupByInput, type ViewFilter } from '../lib/tableGroupMeta';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// These are generated in the application, not in feature packs
-// Import them conditionally to avoid build errors in feature pack builds
-let schema: any = null;
-let HIT_UI_SPECS: any = null;
-try {
-  // Dynamic imports that may not exist in feature pack builds
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  schema = require('@/lib/schema');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  const hitUiSpecsModule = require('@/lib/hit-ui-specs.generated');
-  HIT_UI_SPECS = hitUiSpecsModule?.HIT_UI_SPECS || null;
-} catch {
-  // Files don't exist in feature pack builds, which is fine
-  schema = null;
-  HIT_UI_SPECS = null;
-}
-
-type ViewFilter = {
-  field: string;
-  operator: string;
-  value: any;
-};
-
-type GroupByInput = {
-  field?: string;
-  orderBy?: 'auto' | 'value' | 'count' | 'relatedSortOrder';
-  orderDirection?: 'asc' | 'desc';
-};
-
-const CURRENT_USER_TOKEN = '__current_user__';
-
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
-}
-
-function getEntities(): Record<string, any> {
-  return (HIT_UI_SPECS as any)?.entities || {};
-}
-
-function getEntitySpec(entityKey: string): any | null {
-  const entities = getEntities();
-  const spec = entities?.[entityKey];
-  return spec && typeof spec === 'object' ? spec : null;
-}
-
-function getEntityByTableId(tableId: string): { entityKey: string; spec: any } | null {
-  const entities = getEntities();
-  for (const [entityKey, spec] of Object.entries(entities)) {
-    const list = (spec as any)?.list;
-    const tId = list && typeof list.tableId === 'string' ? list.tableId.trim() : '';
-    if (tId && tId === tableId) return { entityKey, spec };
-  }
-  return null;
-}
-
-function getTableFromSpec(spec: any): any | null {
-  if (!schema) return null;
-  const storage = spec && typeof spec === 'object' ? (spec as any).storage : null;
-  const tableName =
-    (storage && typeof storage.drizzleTable === 'string' ? storage.drizzleTable : '') ||
-    (typeof (spec as any).drizzleTable === 'string' ? String((spec as any).drizzleTable) : '');
-  if (!tableName) return null;
-  return (schema as any)[tableName] || null;
-}
-
-function resolveEntityKeyFromOptionSource(source: string): string | null {
-  const s = String(source || '').trim();
-  if (!s) return null;
-  const entities = getEntities();
-  if (entities && typeof entities === 'object' && entities[s]) return s;
-
-  const parts = s.split('.');
-  if (parts.length !== 2) return null;
-  const ns = parts[0];
-  let name = parts[1];
-  if (name.endsWith('ies')) name = `${name.slice(0, -3)}y`;
-  else if (name.endsWith('s')) name = name.slice(0, -1);
-  const candidate = `${ns}.${name}`;
-  if (entities && typeof entities === 'object' && entities[candidate]) return candidate;
-  return null;
-}
-
-function inferLabelFieldFromEntitySpec(entityKey: string): string {
-  const ent = getEntities()?.[entityKey] || null;
-  const fields = ent && typeof ent === 'object' ? (ent as any).fields : null;
-  const fm = fields && typeof fields === 'object' ? fields : {};
-  for (const k of ['name', 'title', 'label', 'code', 'id']) {
-    if (fm && typeof fm === 'object' && (fm as any)[k]) return k;
-  }
-  return 'name';
-}
-
-function pickOrderField(table: any): string | null {
-  if (!table || typeof table !== 'object') return null;
-  if ((table as any).sortOrder) return 'sortOrder';
-  if ((table as any).order) return 'order';
-  if ((table as any).level) return 'level';
-  return null;
-}
-
-function resolveGroupByField(spec: any, requestedField: string): {
-  fieldKey: string;
-  fieldSpec: any;
-  labelFromRow?: string | null;
-  optionSourceKey?: string | null;
-  referenceEntity?: string | null;
-} | null {
-  if (!spec || typeof spec !== 'object') return null;
-  const fields = (spec as any).fields;
-  if (!fields || typeof fields !== 'object') return null;
-
-  const direct = fields[requestedField];
-  const directIsVirtual =
-    Boolean(direct && typeof direct === 'object' && (direct as any)?.virtual === true);
-  if (direct && typeof direct === 'object' && !directIsVirtual) {
-    const labelFromRow = (direct as any)?.labelFromRow || (direct as any)?.reference?.labelFromRow || null;
-    const optionSourceKey = String((direct as any)?.optionSource || '').trim() || null;
-    const referenceEntity = String((direct as any)?.reference?.entityType || '').trim() || null;
-    return { fieldKey: requestedField, fieldSpec: direct, labelFromRow, optionSourceKey, referenceEntity };
-  }
-
-  for (const [fieldKey, fsAny] of Object.entries(fields)) {
-    const fs = fsAny && typeof fsAny === 'object' ? (fsAny as any) : null;
-    if (!fs) continue;
-    const labelFromRow = fs?.labelFromRow || fs?.reference?.labelFromRow || null;
-    if (labelFromRow && String(labelFromRow).trim() === requestedField) {
-      const optionSourceKey = String(fs?.optionSource || '').trim() || null;
-      const referenceEntity = String(fs?.reference?.entityType || '').trim() || null;
-      return { fieldKey: String(fieldKey), fieldSpec: fs, labelFromRow: String(labelFromRow), optionSourceKey, referenceEntity };
-    }
-  }
-
-  return null;
-}
-
-async function loadOptionSourceMap(optionSource: string, labelKeyOverride?: string | null) {
-  const entityKey = resolveEntityKeyFromOptionSource(optionSource);
-  if (!entityKey) return { labelMap: {}, orderMap: {} };
-  const spec = getEntitySpec(entityKey);
-  const table = spec ? getTableFromSpec(spec) : null;
-  if (!table) return { labelMap: {}, orderMap: {} };
-
-  const idCol = (table as any).id;
-  const labelField = labelKeyOverride || inferLabelFieldFromEntitySpec(entityKey);
-  const labelCol = (table as any)[labelField];
-  if (!idCol || !labelCol) return { labelMap: {}, orderMap: {} };
-
-  const orderField = pickOrderField(table);
-  const orderCol = orderField ? (table as any)[orderField] : null;
-
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: idCol,
-      label: labelCol,
-      sortOrder: orderCol ?? sql<number | null>`null`,
-    })
-    .from(table);
-
-  const labelMap: Record<string, string> = {};
-  const orderMap: Record<string, number> = {};
-  for (const r of rows as any[]) {
-    if (r?.id == null) continue;
-    const key = String(r.id);
-    if (r.label != null) labelMap[key] = String(r.label);
-    if (r.sortOrder != null) {
-      const n = Number(r.sortOrder);
-      if (Number.isFinite(n)) orderMap[key] = n;
-    }
-  }
-  return { labelMap, orderMap };
-}
-
-function buildFilterCondition(
-  filter: ViewFilter,
-  columnMap: Record<string, AnyColumn>,
-  ctx?: { currentUserId?: string | null }
-): SQL | null {
-  const column = columnMap[filter.field];
-  if (!column) return null;
-
-  const { operator } = filter;
-  let value = filter.value;
-
-  if (value === CURRENT_USER_TOKEN) {
-    value = ctx?.currentUserId ?? null;
-  } else if (Array.isArray(value) && value.includes(CURRENT_USER_TOKEN)) {
-    const resolved = ctx?.currentUserId ?? null;
-    value = value.map((v) => (v === CURRENT_USER_TOKEN ? resolved : v));
-  }
-
-  if (value === null || value === undefined || value === '') {
-    if (operator === 'isTrue') return eq(column, sql`true`);
-    if (operator === 'isFalse') return eq(column, sql`false`);
-    if (operator === 'isEmpty' || operator === 'isNull') return isNull(column);
-    if (operator === 'isNotEmpty' || operator === 'isNotNull') return isNotNull(column);
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    if (value.length === 0) return null;
-    const strValues = value.map((v) => String(v));
-    switch (operator) {
-      case 'equals':
-      case 'in':
-        return inArray(column, strValues);
-      case 'notEquals':
-      case 'notIn':
-        return sql`${column} NOT IN (${sql.join(strValues.map((v) => sql`${v}`), sql`,`)})`;
-      default:
-        return inArray(column, strValues);
-    }
-  }
-
-  const strValue = String(value);
-
-  switch (operator) {
-    case 'equals':
-      return eq(column, strValue);
-    case 'notEquals':
-      return ne(column, strValue);
-    case 'contains':
-      return ilike(column, `%${strValue}%`);
-    case 'notContains':
-      return notIlike(column, `%${strValue}%`);
-    case 'startsWith':
-      return ilike(column, `${strValue}%`);
-    case 'endsWith':
-      return ilike(column, `%${strValue}`);
-    case 'dateEquals':
-      return eq(column, strValue);
-    case 'dateBefore':
-      return lt(column, strValue);
-    case 'dateAfter':
-      return gt(column, strValue);
-    case 'dateBetween': {
-      let fromRaw: string | null = null;
-      let toRaw: string | null = null;
-      try {
-        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-        if (parsed && typeof parsed === 'object') {
-          fromRaw = (parsed as any).from ?? (parsed as any).start ?? null;
-          toRaw = (parsed as any).to ?? (parsed as any).end ?? null;
-        }
-      } catch {
-        const s = String(value || '');
-        const sep = s.includes('..') ? '..' : s.includes(',') ? ',' : null;
-        if (sep) {
-          const [a, b] = s.split(sep).map((x) => x.trim());
-          fromRaw = a || null;
-          toRaw = b || null;
-        }
-      }
-      const parts: SQL[] = [];
-      if (fromRaw) parts.push(gte(column, String(fromRaw)));
-      if (toRaw) parts.push(lte(column, String(toRaw)));
-      if (parts.length === 0) return null;
-      if (parts.length === 1) return parts[0];
-      return and(...parts) ?? null;
-    }
-    case 'greaterThan':
-      return gt(column, strValue);
-    case 'lessThan':
-      return lt(column, strValue);
-    case 'greaterThanOrEqual':
-      return gte(column, strValue);
-    case 'lessThanOrEqual':
-      return lte(column, strValue);
-    case 'isEmpty':
-    case 'isNull':
-      return isNull(column);
-    case 'isNotEmpty':
-    case 'isNotNull':
-      return isNotNull(column);
-    case 'isTrue':
-      return eq(column, sql`true`);
-    case 'isFalse':
-      return eq(column, sql`false`);
-    default:
-      if (typeof value === 'string') {
-        return ilike(column, `%${strValue}%`);
-      }
-      return eq(column, strValue);
-  }
-}
-
-function buildFiltersCondition(
-  filters: ViewFilter[],
-  columnMap: Record<string, AnyColumn>,
-  filterMode: 'all' | 'any' = 'all',
-  ctx?: { currentUserId?: string | null }
-): SQL | undefined {
-  const conditions = filters
-    .map((filter) => buildFilterCondition(filter, columnMap, ctx))
-    .filter((c): c is SQL => Boolean(c));
-  if (conditions.length === 0) return undefined;
-  return filterMode === 'any' ? or(...conditions) : and(...conditions);
-}
-
-function safeLabelKey(key: string | null | undefined): string {
-  if (key == null) return '';
-  const s = String(key);
-  return s.trim();
 }
 
 function parseFilterValue(raw: string | null | undefined, valueType?: string | null): any {
@@ -353,12 +52,12 @@ async function loadViewForUser(request: NextRequest, viewId: string) {
   }
 
   const db = getDb();
-  const rows = await db.select().from(tableViews).where(eq(tableViews.id, viewId)).limit(1);
+  const rows = await db.select().from(tableViews).where(sql`${tableViews.id} = ${viewId}`).limit(1);
   const view = Array.isArray(rows) ? rows[0] : null;
   if (!view) return { error: 'View not found', status: 404 };
 
   if (view.isSystem || view.userId === user.sub) {
-    const filters = await db.select().from(tableViewFilters).where(eq(tableViewFilters.viewId, view.id));
+    const filters = await db.select().from(tableViewFilters).where(sql`${tableViewFilters.viewId} = ${view.id}`);
     return { view, filters, tableId: view.tableId };
   }
 
@@ -371,38 +70,38 @@ async function loadViewForUser(request: NextRequest, viewId: string) {
   const locationIds = orgScope.locationIds || [];
 
   const shareConditions = [
-    and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, user.sub)),
+    sql`${tableViewShares.principalType} = 'user' and ${tableViewShares.principalId} = ${user.sub}`,
   ];
   const userEmail = String(user.email || '').trim();
   if (userEmail && userEmail !== user.sub) {
-    shareConditions.push(and(eq(tableViewShares.principalType, 'user'), eq(tableViewShares.principalId, userEmail)));
+    shareConditions.push(sql`${tableViewShares.principalType} = 'user' and ${tableViewShares.principalId} = ${userEmail}`);
   }
   if (userGroups.length > 0) {
-    shareConditions.push(and(eq(tableViewShares.principalType, 'group'), inArray(tableViewShares.principalId, userGroups)));
+    shareConditions.push(sql`${tableViewShares.principalType} = 'group' and ${tableViewShares.principalId} in (${sql.join(userGroups.map((g) => sql`${g}`), sql`,`)})`);
   }
   if (userRoles.length > 0) {
-    shareConditions.push(and(eq(tableViewShares.principalType, 'role'), inArray(tableViewShares.principalId, userRoles)));
+    shareConditions.push(sql`${tableViewShares.principalType} = 'role' and ${tableViewShares.principalId} in (${sql.join(userRoles.map((r) => sql`${r}`), sql`,`)})`);
   }
   if (divisionIds.length > 0) {
-    shareConditions.push(and(sql`${tableViewShares.principalType}::text = ${'division'}`, inArray(tableViewShares.principalId, divisionIds)));
+    shareConditions.push(sql`${tableViewShares.principalType}::text = ${'division'} and ${tableViewShares.principalId} in (${sql.join(divisionIds.map((d) => sql`${d}`), sql`,`)})`);
   }
   if (departmentIds.length > 0) {
-    shareConditions.push(and(sql`${tableViewShares.principalType}::text = ${'department'}`, inArray(tableViewShares.principalId, departmentIds)));
+    shareConditions.push(sql`${tableViewShares.principalType}::text = ${'department'} and ${tableViewShares.principalId} in (${sql.join(departmentIds.map((d) => sql`${d}`), sql`,`)})`);
   }
   if (locationIds.length > 0) {
-    shareConditions.push(and(sql`${tableViewShares.principalType}::text = ${'location'}`, inArray(tableViewShares.principalId, locationIds)));
+    shareConditions.push(sql`${tableViewShares.principalType}::text = ${'location'} and ${tableViewShares.principalId} in (${sql.join(locationIds.map((l) => sql`${l}`), sql`,`)})`);
   }
 
   const shareRows = await db
     .select({ id: tableViewShares.id })
     .from(tableViewShares)
-    .where(and(eq(tableViewShares.viewId, view.id), or(...shareConditions)))
+    .where(sql`${tableViewShares.viewId} = ${view.id} and (${sql.join(shareConditions, sql` or `)})`)
     .limit(1);
   if (!shareRows || shareRows.length === 0) {
     return { error: 'Forbidden', status: 403 };
   }
 
-  const filters = await db.select().from(tableViewFilters).where(eq(tableViewFilters.viewId, view.id));
+  const filters = await db.select().from(tableViewFilters).where(sql`${tableViewFilters.viewId} = ${view.id}`);
   return { view, filters, tableId: view.tableId };
 }
 
@@ -426,7 +125,7 @@ export async function POST(request: NextRequest) {
 
   const viewId = typeof body.viewId === 'string' ? body.viewId.trim() : '';
   const tableIdInput = typeof body.tableId === 'string' ? body.tableId.trim() : '';
-  let view: any | null = null;
+  let view: TableView | null = null;
   let tableId = tableIdInput;
   let groupBy = (body.groupBy && typeof body.groupBy === 'object' ? body.groupBy : {}) as GroupByInput;
   let groupByField = typeof groupBy.field === 'string' ? groupBy.field.trim() : '';
@@ -472,165 +171,28 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
   }
 
-  const groupByResolved = resolveGroupByField(uiSpec, groupByField);
-  const effectiveField = groupByResolved?.fieldKey || groupByField;
-  const groupCol = (table as any)[effectiveField];
-  if (!groupCol) return jsonError(`Unknown groupBy field: ${groupByField}`, 400);
-
   const search = typeof body.search === 'string' ? body.search.trim() : '';
   const includeRows = body.includeRows === true;
   const groupPageSizeRaw = Number(body.groupPageSize || 10000);
   const groupPageSize = Math.min(10000, Math.max(1, Number.isFinite(groupPageSizeRaw) ? groupPageSizeRaw : 10000));
 
-  const columnMap: Record<string, AnyColumn> = {};
-  const fields = (uiSpec && typeof uiSpec === 'object' ? (uiSpec as any).fields : null) || {};
-  for (const fieldKey of Object.keys(fields)) {
-    const col = (table as any)[fieldKey];
-    if (col) columnMap[fieldKey] = col as AnyColumn;
-  }
-
-  const conditions: SQL[] = [];
-  const filtersCondition = buildFiltersCondition(filters, columnMap, filterMode, { currentUserId: user.sub || null });
-  if (filtersCondition) conditions.push(filtersCondition);
-
-  if (search) {
-    const searchCols: AnyColumn[] = [];
-    for (const key of ['name', 'title', 'label', 'displayName']) {
-      const col = (table as any)[key];
-      if (col) searchCols.push(col as AnyColumn);
-    }
-    if (searchCols.length > 0) {
-      const searchCond = or(...searchCols.map((col) => ilike(col, `%${search}%`)));
-      if (searchCond) conditions.push(searchCond);
-    }
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const db = getDb();
-  const rows = whereClause
-    ? await db.select({ groupValue: groupCol, count: sql<number>`count(*)` }).from(table).where(whereClause).groupBy(groupCol)
-    : await db.select({ groupValue: groupCol, count: sql<number>`count(*)` }).from(table).groupBy(groupCol);
-
-  const fieldSpec = groupByResolved?.fieldSpec || fields?.[groupByField] || {};
-  const optionSource = String((fieldSpec as any)?.optionSource || '').trim();
-  const referenceEntity = String((fieldSpec as any)?.reference?.entityType || '').trim();
-  const labelFromRow = String(groupByResolved?.labelFromRow || '').trim();
-  const labelEntityKey = referenceEntity || (optionSource ? resolveEntityKeyFromOptionSource(optionSource) : null);
-  const labelEntitySpec = labelEntityKey ? getEntitySpec(labelEntityKey) : null;
-  const labelEntityFields = labelEntitySpec && typeof labelEntitySpec === 'object' ? (labelEntitySpec as any).fields : null;
-  const labelKeyOverride =
-    labelFromRow && labelEntityFields && typeof labelEntityFields === 'object' && labelEntityFields[labelFromRow]
-      ? labelFromRow
-      : null;
-  const optionSourceKey = optionSource || (labelEntityKey ? labelEntityKey : '');
-
-  const { labelMap, orderMap } = optionSourceKey
-    ? await loadOptionSourceMap(optionSourceKey, labelKeyOverride)
-    : { labelMap: {}, orderMap: {} };
-
-  const groupCounts: Record<string, number> = {};
-  const entries = (rows as any[]).map((row) => {
-    const id = row?.groupValue == null ? '' : String(row.groupValue);
-    const label = labelMap[id] ?? id;
-    const key = safeLabelKey(label);
-    const count = Number(row?.count ?? 0) || 0;
-    groupCounts[key] = (groupCounts[key] ?? 0) + count;
-    const sortOrder = Number.isFinite(orderMap[id]) ? orderMap[id] : null;
-    return { key, count, sortOrder, groupValue: id, label: key };
-  });
-
-  const orderByRaw = groupBy.orderBy || 'auto';
-  const orderDirectionRaw = groupBy.orderDirection || '';
-  let orderDirection: 'asc' | 'desc' = orderDirectionRaw === 'desc' ? 'desc' : 'asc';
-  if (!orderDirectionRaw && orderByRaw === 'count') orderDirection = 'desc';
-  const dir = orderDirection === 'desc' ? -1 : 1;
-
-  const hasRelatedOrder = entries.some((e) => Number.isFinite(e.sortOrder as any));
-  const effectiveOrderBy = orderByRaw === 'auto'
-    ? (hasRelatedOrder ? 'relatedSortOrder' : 'value')
-    : orderByRaw;
-
-  const compareKeys = (a: string, b: string) => {
-    if (!a && !b) return 0;
-    if (!a) return 1;
-    if (!b) return -1;
-    return a.localeCompare(b);
-  };
-
-  const sorted = entries.slice();
-  if (effectiveOrderBy === 'count') {
-    sorted.sort((a, b) => {
-      if (a.count !== b.count) return dir * (a.count - b.count);
-      return compareKeys(a.key, b.key);
-    });
-  } else if (effectiveOrderBy === 'relatedSortOrder' && hasRelatedOrder) {
-    sorted.sort((a, b) => {
-      const aSort = Number.isFinite(a.sortOrder as any) ? a.sortOrder : null;
-      const bSort = Number.isFinite(b.sortOrder as any) ? b.sortOrder : null;
-      if (aSort !== null || bSort !== null) {
-        if (aSort == null) return 1;
-        if (bSort == null) return -1;
-        if (aSort !== bSort) return dir * (aSort - bSort);
-      }
-      return compareKeys(a.key, b.key);
-    });
-  } else {
-    sorted.sort((a, b) => dir * compareKeys(a.key, b.key));
-  }
-
-  const seenKeys = new Set<string>();
-  const orderedEntries = sorted.filter((e) => {
-    if (seenKeys.has(e.key)) return false;
-    seenKeys.add(e.key);
-    return true;
-  });
-  const groupOrder = orderedEntries.map((e) => e.key);
-
-  let groups: Array<{ key: string; total: number; rows: any[] }> | undefined = undefined;
-  if (includeRows) {
-    const tableAny = table as any;
-    const sortId = Array.isArray((view as any)?.sorting) && (view as any).sorting.length > 0
-      ? String((view as any).sorting[0]?.id || '')
-      : '';
-    const sortDesc = Array.isArray((view as any)?.sorting) && (view as any).sorting.length > 0
-      ? Boolean((view as any).sorting[0]?.desc)
-      : false;
-    const rowOrderCol = (sortId && (tableAny as any)[sortId]) ? (tableAny as any)[sortId] : (tableAny as any).id;
-    const rowOrder = sortDesc ? desc(rowOrderCol) : asc(rowOrderCol);
-
-    groups = [];
-    for (const entry of orderedEntries) {
-      const groupValue = entry.groupValue;
-      const groupCond = groupValue ? eq(groupCol, groupValue) : isNull(groupCol);
-      const rowsQuery = whereClause
-        ? await db.select().from(table).where(and(whereClause, groupCond)).orderBy(rowOrder).limit(groupPageSize)
-        : await db.select().from(table).where(groupCond).orderBy(rowOrder).limit(groupPageSize);
-      const enriched = (rowsQuery as any[]).map((row) => {
-        const out = { ...row };
-        if (labelFromRow && groupValue && (!out[labelFromRow] || String(out[labelFromRow]).trim() === '')) {
-          const label = labelMap[groupValue];
-          if (label) out[labelFromRow] = label;
-        }
-        return out;
-      });
-      groups.push({
-        key: entry.key,
-        total: groupCounts[entry.key] ?? 0,
-        rows: enriched,
-      });
-    }
-  }
-
-  return NextResponse.json({
+  const result = await buildTableGroupMeta({
     tableId,
-    groupBy: {
-      field: groupByField,
-      orderBy: orderByRaw,
-      orderDirection,
-    },
-    groupCounts,
-    groupOrder,
-    ...(groups ? { groups } : {}),
+    groupBy,
+    filters,
+    filterMode,
+    search,
+    includeRows,
+    groupPageSize,
+    view: view ? { sorting: view.sorting as Array<{ id?: string; desc?: boolean }> | undefined } : null,
+    currentUserId: user.sub || null,
+    entity,
+    table,
   });
+
+  if ('error' in result) {
+    return jsonError(result.error, result.status);
+  }
+
+  return NextResponse.json(result);
 }
