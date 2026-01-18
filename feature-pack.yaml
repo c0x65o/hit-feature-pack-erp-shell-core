@@ -105,6 +105,12 @@ routes:
     authz: { entity: logs, verb: read }
 
 nav:
+  - id: my-hub
+    label: My Hub
+    icon: Home
+    group: main
+    weight: 10
+    showWhen: authenticated
   - id: logs
     label: Logs
     icon: FileText

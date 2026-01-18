@@ -214,9 +214,8 @@ function persistThemePreference(preference: ThemePreference) {
 // =============================================================================
 
 const groupConfig: Record<string, { label: string; order: number }> = {
-  hub: { label: 'MY HUB', order: 1 },
-  main: { label: 'MAIN', order: 2 },
-  system: { label: 'SYSTEM', order: 3 },
+  main: { label: 'MAIN', order: 1 },
+  system: { label: 'SYSTEM', order: 2 },
 };
 
 function groupNavItems(items: NavItem[]): { group: string; label: string; items: NavItem[] }[] {
