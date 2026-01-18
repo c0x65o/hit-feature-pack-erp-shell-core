@@ -93,10 +93,6 @@ api:
       description: "Tool surface for a given feature pack (from .hit/generated/capabilities.json)"
 
 routes:
-  - path: /hub
-    page: MyStuff
-    roles: []
-    default_roles_allow: [user]
   - path: /logs/errors
     page: ErrorLog
     roles: []
@@ -109,13 +105,6 @@ routes:
     authz: { entity: logs, verb: read }
 
 nav:
-  - id: my-hub
-    label: My Hub
-    icon: Home
-    path: /hub
-    group: main
-    weight: 10
-    showWhen: authenticated
   - id: logs
     label: Logs
     icon: FileText

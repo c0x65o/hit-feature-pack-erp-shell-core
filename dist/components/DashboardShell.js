@@ -176,8 +176,9 @@ function persistThemePreference(preference) {
 // NAV GROUP HELPERS
 // =============================================================================
 const groupConfig = {
-    main: { label: 'MAIN', order: 1 },
-    system: { label: 'SYSTEM', order: 2 },
+    hub: { label: 'MY HUB', order: 1 },
+    main: { label: 'MAIN', order: 2 },
+    system: { label: 'SYSTEM', order: 3 },
 };
 function groupNavItems(items) {
     const groups = {};
