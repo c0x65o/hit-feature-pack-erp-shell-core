@@ -70,6 +70,11 @@ api:
       handler: "@hit/feature-pack-erp-shell-core/server/api/table-data-grouped-buckets"
       description: "Fetch grouped rows for a segment bucket column (tableId+columnKey) via metrics-core + providers"
 
+    - path: /api/table-data/group-meta
+      methods: [POST]
+      handler: "@hit/feature-pack-erp-shell-core/server/api/table-data-group-meta"
+      description: "Compute group order + counts for a tableId + view grouping"
+
     # Dashboards + Reports moved to dedicated feature packs:
     # - @hit/feature-pack-dashboards owns /api/dashboard-definitions*
 

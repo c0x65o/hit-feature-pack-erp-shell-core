@@ -31,7 +31,7 @@ export const tableViews = pgTable('table_views', {
     // View configuration
     columnVisibility: jsonb('column_visibility'), // Record<string, boolean> - which columns are visible
     sorting: jsonb('sorting'), // Array<{ id: string; desc: boolean }> - sort configuration
-    groupBy: jsonb('group_by'), // { field: string; sortOrder?: string[] } - grouping configuration
+    groupBy: jsonb('group_by'), // { field: string; sortOrder?: string[]; orderBy?: string; orderDirection?: string } - grouping configuration
     columnOrder: jsonb('column_order'), // string[] - ordered column keys for web table display
     mobileColumns: jsonb('mobile_columns'), // string[] - ordered column keys for mobile card preview
     // Metadata

@@ -53,6 +53,7 @@ const LAST_IMPERSONATED_EMAIL_KEY = 'hit_last_impersonated_email';
 const MENU_OPEN_KEY = 'erp-shell-core-menu-open';
 const EXPANDED_NODES_KEY = 'erp-shell-core-expanded-nodes';
 const NAV_SCROLL_KEY = 'erp-shell-core-nav-scroll';
+const HRM_PROFILE_CACHE_KEY = 'erp-shell-core-hrm-profile';
 
 function getCookieValue(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -147,6 +148,45 @@ function employeeDisplayName(employee: any): string {
   const first = String(employee?.firstName || employee?.first_name || '').trim();
   const last = String(employee?.lastName || employee?.last_name || '').trim();
   return [first, last].filter(Boolean).join(' ').trim();
+}
+
+type CachedHrmProfile = {
+  email: string;
+  preferredName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profilePictureUrl?: string | null;
+  updatedAt?: number;
+};
+
+function getCachedHrmProfile(email: string | null | undefined): CachedHrmProfile | null {
+  if (!email || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${HRM_PROFILE_CACHE_KEY}:${email.toLowerCase()}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedHrmProfile;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedHrmProfile(email: string, next: Partial<CachedHrmProfile>): void {
+  if (!email || typeof localStorage === 'undefined') return;
+  const key = `${HRM_PROFILE_CACHE_KEY}:${email.toLowerCase()}`;
+  const prev = getCachedHrmProfile(email) || { email };
+  const merged = {
+    ...prev,
+    ...next,
+    email,
+    updatedAt: Date.now(),
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(merged));
+  } catch {
+    // Ignore storage errors (quota, private mode).
+  }
 }
 
 function applyThemeToDocument(theme: 'light' | 'dark') {
@@ -837,6 +877,7 @@ function ShellContent({
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
   const [hrmEnabled, setHrmEnabled] = useState<boolean>(() => Boolean((hitConfig as any)?.featurePacks?.hrm));
   const [hrmEmployee, setHrmEmployee] = useState<any | null>(null);
+  const [cachedHrmProfile, setCachedHrmProfileState] = useState<CachedHrmProfile | null>(null);
   const [canEditEmployeeName, setCanEditEmployeeName] = useState<boolean>(false);
   const [employeeNamePermissionLoaded, setEmployeeNamePermissionLoaded] = useState<boolean>(false);
   const [hrmForm, setHrmForm] = useState<{ firstName: string; lastName: string; preferredName: string }>({
@@ -1017,6 +1058,29 @@ function ShellContent({
   }, [hitConfig]);
 
   useEffect(() => {
+    const email = currentUser?.email;
+    if (!email) {
+      setCachedHrmProfileState(null);
+      return;
+    }
+    const cached = getCachedHrmProfile(email);
+    setCachedHrmProfileState(cached);
+    if (cached?.profilePictureUrl && !profilePictureUrl) {
+      setProfilePictureUrl(cached.profilePictureUrl);
+      setCurrentUser((prev) =>
+        prev ? { ...prev, avatar: cached.profilePictureUrl || undefined } : prev
+      );
+    }
+    if (cached && !hrmEmployee) {
+      setHrmForm({
+        firstName: String(cached.firstName || '').trim(),
+        lastName: String(cached.lastName || '').trim(),
+        preferredName: String(cached.preferredName || '').trim(),
+      });
+    }
+  }, [currentUser?.email, hrmEmployee, profilePictureUrl]);
+
+  useEffect(() => {
     let cancelled = false;
     if (!hrmEnabled || !currentUser?.email) {
       setCanEditEmployeeName(false);
@@ -1078,10 +1142,13 @@ function ShellContent({
         const json = await res.json().catch(() => ({}));
         const employee = (json as any)?.employee || null;
         setHrmEmployee(employee);
+        const firstName = String(employee?.firstName || employee?.first_name || '').trim();
+        const lastName = String(employee?.lastName || employee?.last_name || '').trim();
+        const preferredName = String(employee?.preferredName || employee?.preferred_name || '').trim();
         setHrmForm({
-          firstName: String(employee?.firstName || employee?.first_name || '').trim(),
-          lastName: String(employee?.lastName || employee?.last_name || '').trim(),
-          preferredName: String(employee?.preferredName || employee?.preferred_name || '').trim(),
+          firstName,
+          lastName,
+          preferredName,
         });
         const hrmPhoto =
           String(employee?.profilePictureUrl || employee?.profile_picture_url || '').trim() || null;
@@ -1096,6 +1163,17 @@ function ShellContent({
               : null
           );
         }
+        if (currentUser.email) {
+          setCachedHrmProfile(currentUser.email, {
+            preferredName: preferredName || null,
+            firstName: firstName || null,
+            lastName: lastName || null,
+            profilePictureUrl: hrmPhoto || null,
+          });
+          if (!cancelled) {
+            setCachedHrmProfileState(getCachedHrmProfile(currentUser.email));
+          }
+        }
       } catch {
         // Ignore (optional feature)
       }
@@ -1109,10 +1187,19 @@ function ShellContent({
   const userDisplayName = React.useMemo(() => {
     const fromHrm = hrmEmployee ? employeeDisplayName(hrmEmployee) : '';
     if (fromHrm) return fromHrm;
+    const cachedDisplay =
+      cachedHrmProfile
+        ? employeeDisplayName({
+            preferredName: cachedHrmProfile.preferredName || '',
+            firstName: cachedHrmProfile.firstName || '',
+            lastName: cachedHrmProfile.lastName || '',
+          })
+        : '';
+    if (cachedDisplay) return cachedDisplay;
     const fromJwt = String((currentUser as any)?.name || '').trim();
     if (fromJwt) return fromJwt;
     return String(currentUser?.email || 'User');
-  }, [hrmEmployee, currentUser?.name, currentUser?.email]);
+  }, [hrmEmployee, cachedHrmProfile, currentUser?.name, currentUser?.email]);
 
   const canEditPhoto = hrmEnabled && Boolean((hrmEmployee as any)?.id);
   const photoHelperText = !hitConfig
@@ -1167,6 +1254,10 @@ function ShellContent({
         setProfilePictureUrl(nextUrl);
         setCurrentUser((prev) => (prev ? { ...prev, avatar: nextUrl || undefined } : prev));
         setHrmEmployee((prev: any) => (prev ? { ...prev, profilePictureUrl: nextUrl } : prev));
+        if (currentUser?.email) {
+          setCachedHrmProfile(currentUser.email, { profilePictureUrl: nextUrl });
+          setCachedHrmProfileState(getCachedHrmProfile(currentUser.email));
+        }
       }
     };
 
@@ -1786,6 +1877,17 @@ function ShellContent({
             const employee = (hrmJson as any)?.employee || null;
             setHrmEmployee(employee);
             didUpdate = true;
+            if (currentUser?.email) {
+              const displayPreferred = String(employee?.preferredName || employee?.preferred_name || '').trim();
+              const displayFirst = String(employee?.firstName || employee?.first_name || '').trim();
+              const displayLast = String(employee?.lastName || employee?.last_name || '').trim();
+              setCachedHrmProfile(currentUser.email, {
+                preferredName: displayPreferred || null,
+                firstName: displayFirst || null,
+                lastName: displayLast || null,
+              });
+              setCachedHrmProfileState(getCachedHrmProfile(currentUser.email));
+            }
           }
         }
       }
@@ -1932,6 +2034,10 @@ function ShellContent({
         ...prev,
         avatar: data.profile_picture_url || undefined,
       } : null);
+      if (currentUser?.email) {
+        setCachedHrmProfile(currentUser.email, { profilePictureUrl: data.profile_picture_url || null });
+        setCachedHrmProfileState(getCachedHrmProfile(currentUser.email));
+      }
 
       // Dispatch event to update top header avatar
       if (typeof window !== 'undefined') {
@@ -2004,6 +2110,10 @@ function ShellContent({
         ...prev,
         avatar: undefined,
       } : null);
+      if (currentUser?.email) {
+        setCachedHrmProfile(currentUser.email, { profilePictureUrl: null });
+        setCachedHrmProfileState(getCachedHrmProfile(currentUser.email));
+      }
 
       // Dispatch event to update top header avatar
       if (typeof window !== 'undefined') {

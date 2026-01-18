@@ -1,0 +1,422 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { SQL, sql, and, or, eq, ne, ilike, notIlike, gt, lt, gte, lte, inArray, isNull, isNotNull } from 'drizzle-orm';
+import type { AnyColumn } from 'drizzle-orm';
+import { getDb } from '@/lib/db';
+import { extractUserFromRequest } from '../auth';
+import { requireActionPermission } from '@hit/feature-pack-auth-core/server/lib/action-check';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// These are generated in the application, not in feature packs
+// Import them conditionally to avoid build errors in feature pack builds
+let schema: any = null;
+let HIT_UI_SPECS: any = null;
+try {
+  // Dynamic imports that may not exist in feature pack builds
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  schema = require('@/lib/schema');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const hitUiSpecsModule = require('@/lib/hit-ui-specs.generated');
+  HIT_UI_SPECS = hitUiSpecsModule?.HIT_UI_SPECS || null;
+} catch {
+  // Files don't exist in feature pack builds, which is fine
+  schema = null;
+  HIT_UI_SPECS = null;
+}
+
+type ViewFilter = {
+  field: string;
+  operator: string;
+  value: any;
+};
+
+type GroupByInput = {
+  field?: string;
+  orderBy?: 'auto' | 'value' | 'count' | 'relatedSortOrder';
+  orderDirection?: 'asc' | 'desc';
+};
+
+const CURRENT_USER_TOKEN = '__current_user__';
+
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ error: message }, { status });
+}
+
+function getEntities(): Record<string, any> {
+  return (HIT_UI_SPECS as any)?.entities || {};
+}
+
+function getEntityByTableId(tableId: string): { entityKey: string; spec: any } | null {
+  const entities = getEntities();
+  for (const [entityKey, spec] of Object.entries(entities)) {
+    const list = (spec as any)?.list;
+    const tId = list && typeof list.tableId === 'string' ? list.tableId.trim() : '';
+    if (tId && tId === tableId) return { entityKey, spec };
+  }
+  return null;
+}
+
+function getTableFromSpec(spec: any): any | null {
+  const storage = spec && typeof spec === 'object' ? (spec as any).storage : null;
+  const tableName =
+    (storage && typeof storage.drizzleTable === 'string' ? storage.drizzleTable : '') ||
+    (typeof (spec as any).drizzleTable === 'string' ? String((spec as any).drizzleTable) : '');
+  if (!tableName) return null;
+  return (schema as any)[tableName] || null;
+}
+
+function resolveEntityKeyFromOptionSource(source: string): string | null {
+  const s = String(source || '').trim();
+  if (!s) return null;
+  const entities = getEntities();
+  if (entities && typeof entities === 'object' && entities[s]) return s;
+
+  const parts = s.split('.');
+  if (parts.length !== 2) return null;
+  const ns = parts[0];
+  let name = parts[1];
+  if (name.endsWith('ies')) name = `${name.slice(0, -3)}y`;
+  else if (name.endsWith('s')) name = name.slice(0, -1);
+  const candidate = `${ns}.${name}`;
+  if (entities && typeof entities === 'object' && entities[candidate]) return candidate;
+  return null;
+}
+
+function inferLabelFieldFromEntitySpec(entityKey: string): string {
+  const ent = getEntities()?.[entityKey] || null;
+  const fields = ent && typeof ent === 'object' ? (ent as any).fields : null;
+  const fm = fields && typeof fields === 'object' ? fields : {};
+  for (const k of ['name', 'title', 'label', 'code', 'id']) {
+    if (fm && typeof fm === 'object' && (fm as any)[k]) return k;
+  }
+  return 'name';
+}
+
+function pickOrderField(table: any): string | null {
+  if (!table || typeof table !== 'object') return null;
+  if ((table as any).sortOrder) return 'sortOrder';
+  if ((table as any).order) return 'order';
+  if ((table as any).level) return 'level';
+  return null;
+}
+
+async function loadOptionSourceMap(optionSource: string, labelKeyOverride?: string | null) {
+  const entityKey = resolveEntityKeyFromOptionSource(optionSource);
+  if (!entityKey) return { labelMap: {}, orderMap: {} };
+  const spec = getEntities()?.[entityKey];
+  const table = spec ? getTableFromSpec(spec) : null;
+  if (!table) return { labelMap: {}, orderMap: {} };
+
+  const idCol = (table as any).id;
+  const labelField = labelKeyOverride || inferLabelFieldFromEntitySpec(entityKey);
+  const labelCol = (table as any)[labelField];
+  if (!idCol || !labelCol) return { labelMap: {}, orderMap: {} };
+
+  const orderField = pickOrderField(table);
+  const orderCol = orderField ? (table as any)[orderField] : null;
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: idCol,
+      label: labelCol,
+      sortOrder: orderCol ?? sql<number | null>`null`,
+    })
+    .from(table);
+
+  const labelMap: Record<string, string> = {};
+  const orderMap: Record<string, number> = {};
+  for (const r of rows as any[]) {
+    if (r?.id == null) continue;
+    const key = String(r.id);
+    if (r.label != null) labelMap[key] = String(r.label);
+    if (r.sortOrder != null) {
+      const n = Number(r.sortOrder);
+      if (Number.isFinite(n)) orderMap[key] = n;
+    }
+  }
+  return { labelMap, orderMap };
+}
+
+function buildFilterCondition(
+  filter: ViewFilter,
+  columnMap: Record<string, AnyColumn>,
+  ctx?: { currentUserId?: string | null }
+): SQL | null {
+  const column = columnMap[filter.field];
+  if (!column) return null;
+
+  const { operator } = filter;
+  let value = filter.value;
+
+  if (value === CURRENT_USER_TOKEN) {
+    value = ctx?.currentUserId ?? null;
+  } else if (Array.isArray(value) && value.includes(CURRENT_USER_TOKEN)) {
+    const resolved = ctx?.currentUserId ?? null;
+    value = value.map((v) => (v === CURRENT_USER_TOKEN ? resolved : v));
+  }
+
+  if (value === null || value === undefined || value === '') {
+    if (operator === 'isTrue') return eq(column, sql`true`);
+    if (operator === 'isFalse') return eq(column, sql`false`);
+    if (operator === 'isEmpty' || operator === 'isNull') return isNull(column);
+    if (operator === 'isNotEmpty' || operator === 'isNotNull') return isNotNull(column);
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    const strValues = value.map((v) => String(v));
+    switch (operator) {
+      case 'equals':
+      case 'in':
+        return inArray(column, strValues);
+      case 'notEquals':
+      case 'notIn':
+        return sql`${column} NOT IN (${sql.join(strValues.map((v) => sql`${v}`), sql`,`)})`;
+      default:
+        return inArray(column, strValues);
+    }
+  }
+
+  const strValue = String(value);
+
+  switch (operator) {
+    case 'equals':
+      return eq(column, strValue);
+    case 'notEquals':
+      return ne(column, strValue);
+    case 'contains':
+      return ilike(column, `%${strValue}%`);
+    case 'notContains':
+      return notIlike(column, `%${strValue}%`);
+    case 'startsWith':
+      return ilike(column, `${strValue}%`);
+    case 'endsWith':
+      return ilike(column, `%${strValue}`);
+    case 'dateEquals':
+      return eq(column, strValue);
+    case 'dateBefore':
+      return lt(column, strValue);
+    case 'dateAfter':
+      return gt(column, strValue);
+    case 'dateBetween': {
+      let fromRaw: string | null = null;
+      let toRaw: string | null = null;
+      try {
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        if (parsed && typeof parsed === 'object') {
+          fromRaw = (parsed as any).from ?? (parsed as any).start ?? null;
+          toRaw = (parsed as any).to ?? (parsed as any).end ?? null;
+        }
+      } catch {
+        const s = String(value || '');
+        const sep = s.includes('..') ? '..' : s.includes(',') ? ',' : null;
+        if (sep) {
+          const [a, b] = s.split(sep).map((x) => x.trim());
+          fromRaw = a || null;
+          toRaw = b || null;
+        }
+      }
+      const parts: SQL[] = [];
+      if (fromRaw) parts.push(gte(column, String(fromRaw)));
+      if (toRaw) parts.push(lte(column, String(toRaw)));
+      if (parts.length === 0) return null;
+      if (parts.length === 1) return parts[0];
+      return and(...parts) ?? null;
+    }
+    case 'greaterThan':
+      return gt(column, strValue);
+    case 'lessThan':
+      return lt(column, strValue);
+    case 'greaterThanOrEqual':
+      return gte(column, strValue);
+    case 'lessThanOrEqual':
+      return lte(column, strValue);
+    case 'isEmpty':
+    case 'isNull':
+      return isNull(column);
+    case 'isNotEmpty':
+    case 'isNotNull':
+      return isNotNull(column);
+    case 'isTrue':
+      return eq(column, sql`true`);
+    case 'isFalse':
+      return eq(column, sql`false`);
+    default:
+      if (typeof value === 'string') {
+        return ilike(column, `%${strValue}%`);
+      }
+      return eq(column, strValue);
+  }
+}
+
+function buildFiltersCondition(
+  filters: ViewFilter[],
+  columnMap: Record<string, AnyColumn>,
+  filterMode: 'all' | 'any' = 'all',
+  ctx?: { currentUserId?: string | null }
+): SQL | undefined {
+  const conditions = filters
+    .map((filter) => buildFilterCondition(filter, columnMap, ctx))
+    .filter((c): c is SQL => Boolean(c));
+  if (conditions.length === 0) return undefined;
+  return filterMode === 'any' ? or(...conditions) : and(...conditions);
+}
+
+function safeLabelKey(key: string | null | undefined): string {
+  if (key == null) return '';
+  const s = String(key);
+  return s.trim();
+}
+
+export async function POST(request: NextRequest) {
+  const user = extractUserFromRequest(request);
+  if (!user) return jsonError('Unauthorized', 401);
+
+  const body = (await request.json().catch(() => null)) as
+    | {
+        tableId?: unknown;
+        groupBy?: GroupByInput;
+        filters?: ViewFilter[];
+        filterMode?: string;
+        search?: string;
+      }
+    | null;
+  if (!body) return jsonError('Invalid JSON body', 400);
+
+  const tableId = typeof body.tableId === 'string' ? body.tableId.trim() : '';
+  const groupBy = (body.groupBy && typeof body.groupBy === 'object' ? body.groupBy : {}) as GroupByInput;
+  const groupByField = typeof groupBy.field === 'string' ? groupBy.field.trim() : '';
+  if (!tableId) return jsonError('Missing tableId', 400);
+  if (!groupByField) return jsonError('Missing groupBy.field', 400);
+
+  const entity = getEntityByTableId(tableId);
+  if (!entity) return jsonError(`Unknown tableId=${tableId}`, 404);
+
+  const uiSpec = entity.spec;
+  const table = getTableFromSpec(uiSpec);
+  if (!table) return jsonError('Missing storage.drizzleTable', 500);
+
+  const security = (uiSpec && typeof uiSpec === 'object' ? (uiSpec as any).security : null) || {};
+  const listAuthz = security?.list?.authz || null;
+  const requireAction = listAuthz?.require_action;
+  if (requireAction) {
+    const denied = await requireActionPermission(request, String(requireAction), { logPrefix: 'GroupMeta' });
+    if (denied) return denied;
+  }
+
+  const groupCol = (table as any)[groupByField];
+  if (!groupCol) return jsonError(`Unknown groupBy field: ${groupByField}`, 400);
+
+  const filters = Array.isArray(body.filters) ? body.filters : [];
+  const filterMode = body.filterMode === 'any' ? 'any' : 'all';
+  const search = typeof body.search === 'string' ? body.search.trim() : '';
+
+  const columnMap: Record<string, AnyColumn> = {};
+  const fields = (uiSpec && typeof uiSpec === 'object' ? (uiSpec as any).fields : null) || {};
+  for (const fieldKey of Object.keys(fields)) {
+    const col = (table as any)[fieldKey];
+    if (col) columnMap[fieldKey] = col as AnyColumn;
+  }
+
+  const conditions: SQL[] = [];
+  const filtersCondition = buildFiltersCondition(filters, columnMap, filterMode, { currentUserId: user.sub || null });
+  if (filtersCondition) conditions.push(filtersCondition);
+
+  if (search) {
+    const searchCols: AnyColumn[] = [];
+    for (const key of ['name', 'title', 'label', 'displayName']) {
+      const col = (table as any)[key];
+      if (col) searchCols.push(col as AnyColumn);
+    }
+    if (searchCols.length > 0) {
+      const searchCond = or(...searchCols.map((col) => ilike(col, `%${search}%`)));
+      if (searchCond) conditions.push(searchCond);
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const db = getDb();
+  const groupExpr = sql<string>`coalesce(${groupCol}, '')`;
+  const rows = whereClause
+    ? await db.select({ groupValue: groupExpr, count: sql<number>`count(*)` }).from(table).where(whereClause).groupBy(groupCol)
+    : await db.select({ groupValue: groupExpr, count: sql<number>`count(*)` }).from(table).groupBy(groupCol);
+
+  const fieldSpec = fields?.[groupByField] || {};
+  const optionSource = String((fieldSpec as any)?.optionSource || '').trim();
+  const referenceEntity = String((fieldSpec as any)?.reference?.entityType || '').trim();
+  const labelFromRow = String((fieldSpec as any)?.labelFromRow || '').trim();
+  const labelEntityKey = referenceEntity || (optionSource ? resolveEntityKeyFromOptionSource(optionSource) : null);
+  const labelKeyOverride = labelEntityKey ? labelFromRow || inferLabelFieldFromEntitySpec(labelEntityKey) : null;
+  const optionSourceKey = optionSource || (labelEntityKey ? labelEntityKey : '');
+
+  const { labelMap, orderMap } = optionSourceKey
+    ? await loadOptionSourceMap(optionSourceKey, labelKeyOverride)
+    : { labelMap: {}, orderMap: {} };
+
+  const groupCounts: Record<string, number> = {};
+  const entries = (rows as any[]).map((row) => {
+    const id = row?.groupValue == null ? '' : String(row.groupValue);
+    const label = labelMap[id] ?? id;
+    const key = safeLabelKey(label);
+    const count = Number(row?.count ?? 0) || 0;
+    groupCounts[key] = (groupCounts[key] ?? 0) + count;
+    const sortOrder = Number.isFinite(orderMap[id]) ? orderMap[id] : null;
+    return { key, count, sortOrder };
+  });
+
+  const orderByRaw = groupBy.orderBy || 'auto';
+  const orderDirectionRaw = groupBy.orderDirection || '';
+  let orderDirection: 'asc' | 'desc' = orderDirectionRaw === 'desc' ? 'desc' : 'asc';
+  if (!orderDirectionRaw && orderByRaw === 'count') orderDirection = 'desc';
+  const dir = orderDirection === 'desc' ? -1 : 1;
+
+  const hasRelatedOrder = entries.some((e) => Number.isFinite(e.sortOrder as any));
+  const effectiveOrderBy = orderByRaw === 'auto'
+    ? (hasRelatedOrder ? 'relatedSortOrder' : 'value')
+    : orderByRaw;
+
+  const compareKeys = (a: string, b: string) => {
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return a.localeCompare(b);
+  };
+
+  const sorted = entries.slice();
+  if (effectiveOrderBy === 'count') {
+    sorted.sort((a, b) => {
+      if (a.count !== b.count) return dir * (a.count - b.count);
+      return compareKeys(a.key, b.key);
+    });
+  } else if (effectiveOrderBy === 'relatedSortOrder' && hasRelatedOrder) {
+    sorted.sort((a, b) => {
+      const aSort = Number.isFinite(a.sortOrder as any) ? a.sortOrder : null;
+      const bSort = Number.isFinite(b.sortOrder as any) ? b.sortOrder : null;
+      if (aSort !== null || bSort !== null) {
+        if (aSort == null) return 1;
+        if (bSort == null) return -1;
+        if (aSort !== bSort) return dir * (aSort - bSort);
+      }
+      return compareKeys(a.key, b.key);
+    });
+  } else {
+    sorted.sort((a, b) => dir * compareKeys(a.key, b.key));
+  }
+
+  const groupOrder = sorted.map((e) => e.key);
+
+  return NextResponse.json({
+    tableId,
+    groupBy: {
+      field: groupByField,
+      orderBy: orderByRaw,
+      orderDirection,
+    },
+    groupCounts,
+    groupOrder,
+  });
+}
